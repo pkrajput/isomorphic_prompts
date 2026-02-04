@@ -1,0 +1,492 @@
+{
+  "dataset": "bigobench",
+  "dataset_dir": "datasets/BigOBench",
+  "files_analyzed": 1,
+  "file_reports": [
+    {
+      "file": "time_complexity_test_set.jsonl",
+      "rows_analyzed": 200,
+      "keys": {
+        "problem_name": {
+          "count": 200,
+          "types": {
+            "str": 200
+          },
+          "samples": [
+            {
+              "type": "str",
+              "length": 12,
+              "is_natural_language": false,
+              "is_json": false,
+              "sample": "300_A. Array"
+            },
+            {
+              "type": "str",
+              "length": 12,
+              "is_natural_language": false,
+              "is_json": false,
+              "sample": "300_A. Array"
+            },
+            {
+              "type": "str",
+              "length": 18,
+              "is_natural_language": false,
+              "is_json": false,
+              "sample": "137_B. Permutation"
+            }
+          ]
+        },
+        "problem_id": {
+          "count": 200,
+          "types": {
+            "str": 200
+          },
+          "samples": [
+            {
+              "type": "str",
+              "length": 4,
+              "is_natural_language": false,
+              "is_json": true,
+              "json_type": "int",
+              "sample": "1717"
+            },
+            {
+              "type": "str",
+              "length": 4,
+              "is_natural_language": false,
+              "is_json": true,
+              "json_type": "int",
+              "sample": "1717"
+            },
+            {
+              "type": "str",
+              "length": 4,
+              "is_natural_language": false,
+              "is_json": true,
+              "json_type": "int",
+              "sample": "1413"
+            }
+          ]
+        },
+        "solution_id": {
+          "count": 200,
+          "types": {
+            "str": 200
+          },
+          "samples": [
+            {
+              "type": "str",
+              "length": 8,
+              "is_natural_language": false,
+              "is_json": false,
+              "sample": "1717_238"
+            },
+            {
+              "type": "str",
+              "length": 8,
+              "is_natural_language": false,
+              "is_json": false,
+              "sample": "1717_175"
+            },
+            {
+              "type": "str",
+              "length": 8,
+              "is_natural_language": false,
+              "is_json": false,
+              "sample": "1413_222"
+            }
+          ]
+        },
+        "description": {
+          "count": 200,
+          "types": {
+            "str": 200
+          },
+          "samples": [
+            {
+              "type": "str",
+              "length": 1390,
+              "is_natural_language": true,
+              "is_json": false,
+              "sample": "Vitaly has an array of n distinct integers. Vitaly wants to divide this array into three non-empty sets so as the following conditions hold: \n\n  1. The product of all numbers in the first set is less ..."
+            },
+            {
+              "type": "str",
+              "length": 1390,
+              "is_natural_language": true,
+              "is_json": false,
+              "sample": "Vitaly has an array of n distinct integers. Vitaly wants to divide this array into three non-empty sets so as the following conditions hold: \n\n  1. The product of all numbers in the first set is less ..."
+            },
+            {
+              "type": "str",
+              "length": 1497,
+              "is_natural_language": true,
+              "is_json": false,
+              "sample": "\"Hey, it's homework time\" \u2014 thought Polycarpus and of course he started with his favourite subject, IT. Polycarpus managed to solve all tasks but for the last one in 20 minutes. However, as he failed ..."
+            }
+          ]
+        },
+        "solution_code": {
+          "count": 200,
+          "types": {
+            "str": 200
+          },
+          "samples": [
+            {
+              "type": "str",
+              "length": 351,
+              "is_natural_language": true,
+              "is_json": false,
+              "sample": "#A. Array\nn = int(input())\na,b,c =[],[],[]\nl = list(map(int,input().split()))\nfor i in l:\n    if i<0:\n        a.append(i)\n    elif i>0:\n        b.append(i)\n    else:\n        c.append(i)\n\nif len(b)==0 ..."
+            },
+            {
+              "type": "str",
+              "length": 141,
+              "is_natural_language": false,
+              "is_json": false,
+              "sample": "(input())\na=sorted(map(int,input().split()))\nb=[a.pop(0)]\nc=a[-1]>0 and [a.pop()] or [a.pop(0),a.pop(0)]\nfor l in b,c,a:\n    print(len(l),*l)"
+            },
+            {
+              "type": "str",
+              "length": 290,
+              "is_natural_language": false,
+              "is_json": false,
+              "sample": "n = int(input())\nx = list(map(int, input().split()))\na, list_of_set = n * [0], n * [0]\nans = 0\nfor i in range(1, n + 1):\n    a[i - 1] = i\nfor j in range(n):\n    if j + 1 in set(x):\n        list_of_set..."
+            }
+          ]
+        },
+        "dataclass_code": {
+          "count": 200,
+          "types": {
+            "str": 200
+          },
+          "samples": [
+            {
+              "type": "str",
+              "length": 3486,
+              "is_natural_language": true,
+              "is_json": false,
+              "sample": "import sys\nimport time\nimport itertools\nfrom itertools import accumulate, product, permutations, combinations\nimport collections\nfrom collections import Counter, OrderedDict, deque, defaultdict, Chain..."
+            },
+            {
+              "type": "str",
+              "length": 3486,
+              "is_natural_language": true,
+              "is_json": false,
+              "sample": "import sys\nimport time\nimport itertools\nfrom itertools import accumulate, product, permutations, combinations\nimport collections\nfrom collections import Counter, OrderedDict, deque, defaultdict, Chain..."
+            },
+            {
+              "type": "str",
+              "length": 3467,
+              "is_natural_language": true,
+              "is_json": false,
+              "sample": "import sys\nimport time\nimport itertools\nfrom itertools import accumulate, product, permutations, combinations\nimport collections\nfrom collections import Counter, OrderedDict, deque, defaultdict, Chain..."
+            }
+          ]
+        },
+        "inputs_example": {
+          "count": 200,
+          "types": {
+            "str": 200
+          },
+          "samples": [
+            {
+              "type": "str",
+              "length": 13,
+              "is_natural_language": false,
+              "is_json": false,
+              "sample": "4\n-1 -2 -3 0\n"
+            },
+            {
+              "type": "str",
+              "length": 13,
+              "is_natural_language": false,
+              "is_json": false,
+              "sample": "4\n-1 -2 -3 0\n"
+            },
+            {
+              "type": "str",
+              "length": 6,
+              "is_natural_language": false,
+              "is_json": false,
+              "sample": "2\n2 2\n"
+            }
+          ]
+        },
+        "time_complexity_inferred": {
+          "count": 200,
+          "types": {
+            "str": 200
+          },
+          "samples": [
+            {
+              "type": "str",
+              "length": 4,
+              "is_natural_language": false,
+              "is_json": false,
+              "sample": "O(n)"
+            },
+            {
+              "type": "str",
+              "length": 8,
+              "is_natural_language": false,
+              "is_json": false,
+              "sample": "O(nlogn)"
+            },
+            {
+              "type": "str",
+              "length": 7,
+              "is_natural_language": false,
+              "is_json": false,
+              "sample": "O(n**2)"
+            }
+          ]
+        },
+        "time_curve_coefficient": {
+          "count": 200,
+          "types": {
+            "float": 200
+          },
+          "samples": [
+            {
+              "type": "float",
+              "value_sample": 5.978291493662588e-06
+            },
+            {
+              "type": "float",
+              "value_sample": 1.1697626981174008e-05
+            },
+            {
+              "type": "float",
+              "value_sample": 4.045804122207912e-08
+            }
+          ]
+        },
+        "tests": {
+          "count": 200,
+          "types": {
+            "dict": 200
+          },
+          "samples": [
+            {
+              "type": "dict",
+              "keys": [
+                "public_tests",
+                "private_tests",
+                "generated_tests"
+              ],
+              "n_keys": 3,
+              "first_value_type": "list",
+              "first_value_length": 2,
+              "first_value_item_keys": [
+                "input",
+                "output"
+              ]
+            },
+            {
+              "type": "dict",
+              "keys": [
+                "public_tests",
+                "private_tests",
+                "generated_tests"
+              ],
+              "n_keys": 3,
+              "first_value_type": "list",
+              "first_value_length": 2,
+              "first_value_item_keys": [
+                "input",
+                "output"
+              ]
+            },
+            {
+              "type": "dict",
+              "keys": [
+                "public_tests",
+                "private_tests",
+                "generated_tests"
+              ],
+              "n_keys": 3,
+              "first_value_type": "list",
+              "first_value_length": 3,
+              "first_value_item_keys": [
+                "input",
+                "output"
+              ]
+            }
+          ]
+        },
+        "problem_time_curve_coefficient_list": {
+          "count": 200,
+          "types": {
+            "list": 200
+          },
+          "samples": [
+            {
+              "type": "list",
+              "length": 211,
+              "item_type": "float"
+            },
+            {
+              "type": "list",
+              "length": 92,
+              "item_type": "float"
+            },
+            {
+              "type": "list",
+              "length": 18,
+              "item_type": "float"
+            }
+          ]
+        }
+      },
+      "prompt_candidates": [
+        {
+          "field": "description",
+          "avg_length": 1390,
+          "reason": "natural language text"
+        },
+        {
+          "field": "solution_code",
+          "avg_length": 351,
+          "reason": "natural language text"
+        },
+        {
+          "field": "dataclass_code",
+          "avg_length": 3486,
+          "reason": "natural language text"
+        }
+      ],
+      "test_candidates": [
+        {
+          "field": "dataclass_code",
+          "type": "str",
+          "reason": "contains 'assert'",
+          "structure": {
+            "type": "str",
+            "length": 3486,
+            "is_natural_language": true,
+            "is_json": false,
+            "sample": "import sys\nimport time\nimport itertools\nfrom itertools import accumulate, product, permutations, combinations\nimport collections\nfrom collections import Counter, OrderedDict, deque, defaultdict, Chain..."
+          }
+        },
+        {
+          "field": "inputs_example",
+          "type": "str",
+          "reason": "key contains test-related word",
+          "structure": {
+            "type": "str",
+            "length": 13,
+            "is_natural_language": false,
+            "is_json": false,
+            "sample": "4\n-1 -2 -3 0\n"
+          }
+        },
+        {
+          "field": "tests",
+          "type": "dict",
+          "reason": "key contains test-related word; contains public_tests/private_tests",
+          "structure": {
+            "type": "dict",
+            "keys": [
+              "public_tests",
+              "private_tests",
+              "generated_tests"
+            ],
+            "n_keys": 3,
+            "first_value_type": "list",
+            "first_value_length": 2,
+            "first_value_item_keys": [
+              "input",
+              "output"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "prompt_candidates": {
+    "description": {
+      "files": [
+        "time_complexity_test_set.jsonl"
+      ],
+      "reasons": [
+        "natural language text"
+      ]
+    },
+    "solution_code": {
+      "files": [
+        "time_complexity_test_set.jsonl"
+      ],
+      "reasons": [
+        "natural language text"
+      ]
+    },
+    "dataclass_code": {
+      "files": [
+        "time_complexity_test_set.jsonl"
+      ],
+      "reasons": [
+        "natural language text"
+      ]
+    }
+  },
+  "test_candidates": {
+    "dataclass_code": {
+      "files": [
+        "time_complexity_test_set.jsonl"
+      ],
+      "reasons": [
+        "contains 'assert'"
+      ],
+      "structure": {
+        "type": "str",
+        "length": 3486,
+        "is_natural_language": true,
+        "is_json": false,
+        "sample": "import sys\nimport time\nimport itertools\nfrom itertools import accumulate, product, permutations, combinations\nimport collections\nfrom collections import Counter, OrderedDict, deque, defaultdict, Chain..."
+      }
+    },
+    "inputs_example": {
+      "files": [
+        "time_complexity_test_set.jsonl"
+      ],
+      "reasons": [
+        "key contains test-related word"
+      ],
+      "structure": {
+        "type": "str",
+        "length": 13,
+        "is_natural_language": false,
+        "is_json": false,
+        "sample": "4\n-1 -2 -3 0\n"
+      }
+    },
+    "tests": {
+      "files": [
+        "time_complexity_test_set.jsonl"
+      ],
+      "reasons": [
+        "key contains test-related word; contains public_tests/private_tests"
+      ],
+      "structure": {
+        "type": "dict",
+        "keys": [
+          "public_tests",
+          "private_tests",
+          "generated_tests"
+        ],
+        "n_keys": 3,
+        "first_value_type": "list",
+        "first_value_length": 2,
+        "first_value_item_keys": [
+          "input",
+          "output"
+        ]
+      }
+    }
+  },
+  "recommended": {
+    "prompt_field": "description",
+    "test_field": "tests"
+  }
+}

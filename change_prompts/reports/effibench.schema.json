@@ -1,0 +1,573 @@
+{
+  "dataset": "effibench",
+  "dataset_dir": "datasets/Effibench",
+  "files_analyzed": 1,
+  "file_reports": [
+    {
+      "file": "prompts_tests_python3.jsonl",
+      "rows_analyzed": 200,
+      "keys": {
+        "id": {
+          "count": 200,
+          "types": {
+            "str": 200
+          },
+          "samples": [
+            {
+              "type": "str",
+              "length": 4,
+              "is_natural_language": false,
+              "is_json": true,
+              "json_type": "int",
+              "sample": "3188"
+            },
+            {
+              "type": "str",
+              "length": 4,
+              "is_natural_language": false,
+              "is_json": true,
+              "json_type": "int",
+              "sample": "3190"
+            },
+            {
+              "type": "str",
+              "length": 4,
+              "is_natural_language": false,
+              "is_json": true,
+              "json_type": "int",
+              "sample": "3191"
+            }
+          ]
+        },
+        "title": {
+          "count": 200,
+          "types": {
+            "str": 200
+          },
+          "samples": [
+            {
+              "type": "str",
+              "length": 15,
+              "is_natural_language": false,
+              "is_json": false,
+              "sample": "Find Champion I"
+            },
+            {
+              "type": "str",
+              "length": 54,
+              "is_natural_language": false,
+              "is_json": false,
+              "sample": "Minimum Operations to Maximize Last Elements in Arrays"
+            },
+            {
+              "type": "str",
+              "length": 49,
+              "is_natural_language": false,
+              "is_json": false,
+              "sample": "Maximum Score After Applying Operations on a Tree"
+            }
+          ]
+        },
+        "title_slug": {
+          "count": 200,
+          "types": {
+            "str": 200
+          },
+          "samples": [
+            {
+              "type": "str",
+              "length": 15,
+              "is_natural_language": false,
+              "is_json": false,
+              "sample": "find-champion-i"
+            },
+            {
+              "type": "str",
+              "length": 54,
+              "is_natural_language": false,
+              "is_json": false,
+              "sample": "minimum-operations-to-maximize-last-elements-in-arrays"
+            },
+            {
+              "type": "str",
+              "length": 49,
+              "is_natural_language": false,
+              "is_json": false,
+              "sample": "maximum-score-after-applying-operations-on-a-tree"
+            }
+          ]
+        },
+        "prompt": {
+          "count": 200,
+          "types": {
+            "str": 200
+          },
+          "samples": [
+            {
+              "type": "str",
+              "length": 1347,
+              "is_natural_language": true,
+              "is_json": false,
+              "sample": "There are `n` teams numbered from `0` to `n - 1` in a tournament.\n\n\nGiven a **0\\-indexed** 2D boolean matrix `grid` of size `n * n`. For all `i, j` that `0 <= i, j <= n - 1` and `i != j` team `i` is *..."
+            },
+            {
+              "type": "str",
+              "length": 2140,
+              "is_natural_language": true,
+              "is_json": false,
+              "sample": "You are given two **0\\-indexed** integer arrays, `nums1` and `nums2`, both having length `n`.\n\n\nYou are allowed to perform a series of **operations** (**possibly none**).\n\n\nIn an operation, you select..."
+            },
+            {
+              "type": "str",
+              "length": 2280,
+              "is_natural_language": true,
+              "is_json": false,
+              "sample": "There is an undirected tree with `n` nodes labeled from `0` to `n - 1`, and rooted at node `0`. You are given a 2D integer array `edges` of length `n - 1`, where `edges[i] = [ai, bi]` indicates that t..."
+            }
+          ]
+        },
+        "starter_code_python3": {
+          "count": 200,
+          "types": {
+            "str": 200
+          },
+          "samples": [
+            {
+              "type": "str",
+              "length": 82,
+              "is_natural_language": false,
+              "is_json": false,
+              "sample": "class Solution:\n    def findChampion(self, grid: List[List[int]]) -> int:\n        "
+            },
+            {
+              "type": "str",
+              "length": 96,
+              "is_natural_language": false,
+              "is_json": false,
+              "sample": "class Solution:\n    def minOperations(self, nums1: List[int], nums2: List[int]) -> int:\n        "
+            },
+            {
+              "type": "str",
+              "length": 117,
+              "is_natural_language": false,
+              "is_json": false,
+              "sample": "class Solution:\n    def maximumScoreAfterOperations(self, edges: List[List[int]], values: List[int]) -> int:\n        "
+            }
+          ]
+        },
+        "test_runner_python3": {
+          "count": 200,
+          "types": {
+            "str": 200
+          },
+          "samples": [
+            {
+              "type": "str",
+              "length": 512,
+              "is_natural_language": true,
+              "is_json": false,
+              "sample": "==Code Submission==\n\ndef deserialize_stdin(input_str):\n    lines = input_str.strip().splitlines()\n    if not lines:\n        return []\n    n = int(lines[0].strip())\n    grid = []\n    for i in range(1, ..."
+            },
+            {
+              "type": "str",
+              "length": 595,
+              "is_natural_language": true,
+              "is_json": false,
+              "sample": "==Code Submission==\n\ndef deserialize_stdin(input_str):\n    # Expecting input_str in the format: \"num1,num2,...,numK num1,num2,...,numK\"\n    nums1_str, nums2_str = input_str.split(' ', 1)\n    nums1 = l..."
+            },
+            {
+              "type": "str",
+              "length": 7884,
+              "is_natural_language": true,
+              "is_json": false,
+              "sample": "# Task 3: Python3 Test Case Runner (Fixed)\n# No import statements here - will be auto-injected\n\n# No helper classes needed before placeholder\n\n==Code Submission==\n\n# Function to parse the input string..."
+            }
+          ]
+        },
+        "generated_tests": {
+          "count": 200,
+          "types": {
+            "str": 200
+          },
+          "samples": [
+            {
+              "type": "str",
+              "length": 55022,
+              "is_natural_language": true,
+              "is_json": true,
+              "json_type": "list",
+              "json_list_length": 100,
+              "json_item_type": "dict",
+              "json_item_keys": [
+                "input",
+                "output"
+              ],
+              "sample": "[{\"input\": \"2\\n0,1\\n0,0\", \"output\": \"0\"}, {\"input\": \"3\\n0,0,0\\n1,0,0\\n1,1,0\", \"output\": \"2\"}, {\"input\": \"4\\n0,1,1,1\\n0,0,1,1\\n0,0,0,1\\n0,0,0,0\", \"output\": \"0\"}, {\"input\": \"10\\n0,0,0,0,0,0,0,0,0,0\\n1,0..."
+            },
+            {
+              "type": "str",
+              "length": 9284,
+              "is_natural_language": true,
+              "is_json": true,
+              "json_type": "list",
+              "json_list_length": 100,
+              "json_item_type": "dict",
+              "json_item_keys": [
+                "input",
+                "output"
+              ],
+              "sample": "[{\"input\": \"5 10\", \"output\": \"0\"}, {\"input\": \"1,2,7 4,5,3\", \"output\": \"1\"}, {\"input\": \"2,3,4,5,9 8,8,4,4,4\", \"output\": \"2\"}, {\"input\": \"1,5,4 2,5,3\", \"output\": \"-1\"}, {\"input\": \"1,2,3,4 2,3,4,5\", \"out..."
+            },
+            {
+              "type": "str",
+              "length": 767400,
+              "is_natural_language": true,
+              "is_json": true,
+              "json_type": "list",
+              "json_list_length": 100,
+              "json_item_type": "dict",
+              "json_item_keys": [
+                "input",
+                "output"
+              ],
+              "sample": "[{\"input\": \"5,2,5,2,1,1|0,1;0,2;0,3;2,4;4,5\", \"output\": \"11\"}, {\"input\": \"20,10,9,7,4,3,5|0,1;0,2;1,3;1,4;2,5;2,6\", \"output\": \"40\"}, {\"input\": \"686579304,119540832|0,1\", \"output\": \"686579304\"}, {\"inpu..."
+            }
+          ]
+        },
+        "evaluator": {
+          "count": 200,
+          "types": {
+            "str": 200
+          },
+          "samples": [
+            {
+              "type": "str",
+              "length": 427,
+              "is_natural_language": true,
+              "is_json": false,
+              "sample": "def evaluate(expected_output: str, program_output: str) -> bool:\n    # Strip extra whitespace and newlines.\n    expected = expected_output.strip()\n    program = program_output.strip()\n    try:\n       ..."
+            },
+            {
+              "type": "str",
+              "length": 398,
+              "is_natural_language": true,
+              "is_json": false,
+              "sample": "def evaluate(expected_output: str, program_output: str) -> bool:\n    def deserialize(output_str):\n        # Our serialization for output is a plain integer in string format.\n        return int(output_..."
+            },
+            {
+              "type": "str",
+              "length": 1261,
+              "is_natural_language": true,
+              "is_json": false,
+              "sample": "# Task 2: Test Case Evaluator (Python)\ndef evaluate(expected_output: str, program_output: str) -> bool:\n    # Helper function for deserialization (consistent with Task 1)\n    def deserialize_output(ou..."
+            }
+          ]
+        },
+        "test_case_generator": {
+          "count": 200,
+          "types": {
+            "str": 200
+          },
+          "samples": [
+            {
+              "type": "str",
+              "length": 2165,
+              "is_natural_language": true,
+              "is_json": false,
+              "sample": "def generate_test_cases(num_cases: int, seed: int = 42) -> list:\n    import random\n    random.seed(seed)\n    test_cases = []\n    \n    # Sample solution based on the provided code.\n    def sample_solut..."
+            },
+            {
+              "type": "str",
+              "length": 2351,
+              "is_natural_language": true,
+              "is_json": false,
+              "sample": "def generate_test_cases(num_cases: int, seed: int = 42) -> list:\n    import random\n    random.seed(seed)\n    \n    def sample_solution(nums1, nums2):\n        # This is an adaptation of the provided sam..."
+            },
+            {
+              "type": "str",
+              "length": 12343,
+              "is_natural_language": true,
+              "is_json": false,
+              "sample": "import random\nimport math\nimport sys\nfrom typing import List, Dict # Keep typing for clarity, might be removed by platform\n\n# Must be defined within the function scope as per instructions\ndef generate..."
+            }
+          ]
+        },
+        "time_limit_nanos": {
+          "count": 200,
+          "types": {
+            "null": 200
+          },
+          "samples": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "memory_limit_bytes": {
+          "count": 200,
+          "types": {
+            "null": 200
+          },
+          "samples": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "_src_line": {
+          "count": 200,
+          "types": {
+            "int": 200
+          },
+          "samples": [
+            {
+              "type": "int",
+              "value_sample": 286
+            },
+            {
+              "type": "int",
+              "value_sample": 287
+            },
+            {
+              "type": "int",
+              "value_sample": 288
+            }
+          ]
+        },
+        "_split": {
+          "count": 200,
+          "types": {
+            "str": 200
+          },
+          "samples": [
+            {
+              "type": "str",
+              "length": 4,
+              "is_natural_language": false,
+              "is_json": false,
+              "sample": "test"
+            },
+            {
+              "type": "str",
+              "length": 4,
+              "is_natural_language": false,
+              "is_json": false,
+              "sample": "test"
+            },
+            {
+              "type": "str",
+              "length": 4,
+              "is_natural_language": false,
+              "is_json": false,
+              "sample": "test"
+            }
+          ]
+        },
+        "_idx": {
+          "count": 200,
+          "types": {
+            "int": 200
+          },
+          "samples": [
+            {
+              "type": "int",
+              "value_sample": 285
+            },
+            {
+              "type": "int",
+              "value_sample": 286
+            },
+            {
+              "type": "int",
+              "value_sample": 287
+            }
+          ]
+        }
+      },
+      "prompt_candidates": [
+        {
+          "field": "prompt",
+          "avg_length": 1347,
+          "reason": "natural language text"
+        },
+        {
+          "field": "test_runner_python3",
+          "avg_length": 512,
+          "reason": "natural language text"
+        },
+        {
+          "field": "generated_tests",
+          "avg_length": 55022,
+          "reason": "natural language text"
+        },
+        {
+          "field": "evaluator",
+          "avg_length": 427,
+          "reason": "natural language text"
+        },
+        {
+          "field": "test_case_generator",
+          "avg_length": 2165,
+          "reason": "natural language text"
+        }
+      ],
+      "test_candidates": [
+        {
+          "field": "test_runner_python3",
+          "type": "str",
+          "reason": "key contains test-related word",
+          "structure": {
+            "type": "str",
+            "length": 512,
+            "is_natural_language": true,
+            "is_json": false,
+            "sample": "==Code Submission==\n\ndef deserialize_stdin(input_str):\n    lines = input_str.strip().splitlines()\n    if not lines:\n        return []\n    n = int(lines[0].strip())\n    grid = []\n    for i in range(1, ..."
+          }
+        },
+        {
+          "field": "generated_tests",
+          "type": "str",
+          "reason": "key contains test-related word; contains input/output JSON pattern; JSON list with input/output dicts",
+          "structure": {
+            "type": "str",
+            "length": 55022,
+            "is_natural_language": true,
+            "is_json": true,
+            "json_type": "list",
+            "json_list_length": 100,
+            "json_item_type": "dict",
+            "json_item_keys": [
+              "input",
+              "output"
+            ],
+            "sample": "[{\"input\": \"2\\n0,1\\n0,0\", \"output\": \"0\"}, {\"input\": \"3\\n0,0,0\\n1,0,0\\n1,1,0\", \"output\": \"2\"}, {\"input\": \"4\\n0,1,1,1\\n0,0,1,1\\n0,0,0,1\\n0,0,0,0\", \"output\": \"0\"}, {\"input\": \"10\\n0,0,0,0,0,0,0,0,0,0\\n1,0..."
+          }
+        },
+        {
+          "field": "test_case_generator",
+          "type": "str",
+          "reason": "key contains test-related word",
+          "structure": {
+            "type": "str",
+            "length": 2165,
+            "is_natural_language": true,
+            "is_json": false,
+            "sample": "def generate_test_cases(num_cases: int, seed: int = 42) -> list:\n    import random\n    random.seed(seed)\n    test_cases = []\n    \n    # Sample solution based on the provided code.\n    def sample_solut..."
+          }
+        }
+      ]
+    }
+  ],
+  "prompt_candidates": {
+    "prompt": {
+      "files": [
+        "prompts_tests_python3.jsonl"
+      ],
+      "reasons": [
+        "natural language text"
+      ]
+    },
+    "test_runner_python3": {
+      "files": [
+        "prompts_tests_python3.jsonl"
+      ],
+      "reasons": [
+        "natural language text"
+      ]
+    },
+    "generated_tests": {
+      "files": [
+        "prompts_tests_python3.jsonl"
+      ],
+      "reasons": [
+        "natural language text"
+      ]
+    },
+    "evaluator": {
+      "files": [
+        "prompts_tests_python3.jsonl"
+      ],
+      "reasons": [
+        "natural language text"
+      ]
+    },
+    "test_case_generator": {
+      "files": [
+        "prompts_tests_python3.jsonl"
+      ],
+      "reasons": [
+        "natural language text"
+      ]
+    }
+  },
+  "test_candidates": {
+    "test_runner_python3": {
+      "files": [
+        "prompts_tests_python3.jsonl"
+      ],
+      "reasons": [
+        "key contains test-related word"
+      ],
+      "structure": {
+        "type": "str",
+        "length": 512,
+        "is_natural_language": true,
+        "is_json": false,
+        "sample": "==Code Submission==\n\ndef deserialize_stdin(input_str):\n    lines = input_str.strip().splitlines()\n    if not lines:\n        return []\n    n = int(lines[0].strip())\n    grid = []\n    for i in range(1, ..."
+      }
+    },
+    "generated_tests": {
+      "files": [
+        "prompts_tests_python3.jsonl"
+      ],
+      "reasons": [
+        "key contains test-related word; contains input/output JSON pattern; JSON list with input/output dicts"
+      ],
+      "structure": {
+        "type": "str",
+        "length": 55022,
+        "is_natural_language": true,
+        "is_json": true,
+        "json_type": "list",
+        "json_list_length": 100,
+        "json_item_type": "dict",
+        "json_item_keys": [
+          "input",
+          "output"
+        ],
+        "sample": "[{\"input\": \"2\\n0,1\\n0,0\", \"output\": \"0\"}, {\"input\": \"3\\n0,0,0\\n1,0,0\\n1,1,0\", \"output\": \"2\"}, {\"input\": \"4\\n0,1,1,1\\n0,0,1,1\\n0,0,0,1\\n0,0,0,0\", \"output\": \"0\"}, {\"input\": \"10\\n0,0,0,0,0,0,0,0,0,0\\n1,0..."
+      }
+    },
+    "test_case_generator": {
+      "files": [
+        "prompts_tests_python3.jsonl"
+      ],
+      "reasons": [
+        "key contains test-related word"
+      ],
+      "structure": {
+        "type": "str",
+        "length": 2165,
+        "is_natural_language": true,
+        "is_json": false,
+        "sample": "def generate_test_cases(num_cases: int, seed: int = 42) -> list:\n    import random\n    random.seed(seed)\n    test_cases = []\n    \n    # Sample solution based on the provided code.\n    def sample_solut..."
+      }
+    }
+  },
+  "recommended": {
+    "prompt_field": "prompt",
+    "test_field": "generated_tests"
+  }
+}

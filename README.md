@@ -70,7 +70,7 @@ By measuring execution phenotype drift (DCTD/DMPD) across isomorphic representat
 ### Local GPU Models (HuggingFace)
 | Model | Backend | HF Model ID | Batch Size | Notes |
 |-------|---------|-------------|------------|-------|
-| `starcoder-15b` | HuggingFace | `bigcode/starcoder` | 4 | Completion model (no chat template) |
+| `starcoder2-15b` | HuggingFace | `bigcode/starcoder2-15b` | 4 | Completion model (no chat template) |
 | `codestral-22b` | HuggingFace | `mistralai/Codestral-22B-v0.1` | 2 | Chat model with template |
 
 ---
@@ -80,11 +80,13 @@ By measuring execution phenotype drift (DCTD/DMPD) across isomorphic representat
 ### Prerequisites
 
 ```bash
-# Install dependencies
-pip install pyyaml tqdm google-generativeai
+# Install all dependencies
+pip install -r requirements.txt
 
-# For HuggingFace models (local GPU)
-pip install transformers torch accelerate
+# Or install individually:
+# Core: pip install pyyaml tqdm
+# Gemini: pip install google-generativeai
+# HuggingFace (local GPU): pip install transformers torch accelerate
 ```
 
 ### Configuration
@@ -141,10 +143,10 @@ python change_prompts/apply_isomorphisms.py \
 #### HuggingFace Models (Local GPU)
 
 ```bash
-# StarCoder 15B on MBPP ISO
+# StarCoder2 15B on MBPP ISO
 ./generation_and_testing/pipeline_generate_and_test.sh \
   --dataset mbpp \
-  --model starcoder-15b \
+  --model starcoder2-15b \
   --batch_size 4 \
   --n_generations 5 \
   --resume
@@ -180,12 +182,12 @@ for DATASET in bigobench effibench mbpp; do
     --resume
 done
 
-# === StarCoder 15B ===
+# === StarCoder2 15B ===
 for DATASET in bigobench effibench mbpp; do
   # ISO
   ./generation_and_testing/pipeline_generate_and_test.sh \
     --dataset $DATASET \
-    --model starcoder-15b \
+    --model starcoder2-15b \
     --batch_size 4 \
     --n_generations 5 \
     --resume
@@ -193,7 +195,7 @@ for DATASET in bigobench effibench mbpp; do
   # Original
   ./generation_and_testing/pipeline_generate_and_test.sh \
     --dataset $DATASET \
-    --model starcoder-15b \
+    --model starcoder2-15b \
     --original \
     --batch_size 4 \
     --n_generations 5 \
@@ -231,9 +233,9 @@ done
   --model gemini-2.0-flash \
   --datasets bigobench,effibench,mbpp
 
-# StarCoder 15B
+# StarCoder2 15B
 ./dynamic_stability/run_metrics.sh \
-  --model starcoder-15b \
+  --model starcoder2-15b \
   --datasets bigobench,effibench,mbpp
 
 # Codestral 22B
@@ -247,7 +249,7 @@ done
 ```bash
 # Only SCTD (faster, no execution)
 ./dynamic_stability/run_metrics.sh \
-  --model starcoder-15b \
+  --model starcoder2-15b \
   --sctd_only
 
 # Only DCTD (requires execution)
@@ -281,7 +283,7 @@ python3 ./generation_and_testing/gen_models.py \
 # HuggingFace generation with batching
 python3 ./generation_and_testing/gen_models.py \
   --dataset mbpp \
-  --model starcoder-15b \
+  --model starcoder2-15b \
   --n_generations 5 \
   --batch_size 4 \
   --config config.yaml \
@@ -302,8 +304,8 @@ python3 ./generation_and_testing/gen_models.py \
 ```bash
 python3 ./generation_and_testing/run_unittests.py \
   --dataset bigobench \
-  --generations_jsonl ./results/starcoder-15b/bigobench_iso/generations/<FILE>.jsonl \
-  --out_jsonl ./results/starcoder-15b/bigobench_iso/unittests/<FILE>__unittest.jsonl \
+  --generations_jsonl ./results/starcoder2-15b/bigobench_iso/generations/<FILE>.jsonl \
+  --out_jsonl ./results/starcoder2-15b/bigobench_iso/unittests/<FILE>__unittest.jsonl \
   --workers 16 \
   --timeout 10 \
   --resume
@@ -324,34 +326,34 @@ python3 dynamic_stability/metric_ready.py \
   --results_root ./results \
   --out_root ./metrics/ready \
   --datasets bigobench,effibench,mbpp \
-  --models starcoder-15b \
+  --models starcoder2-15b \
   --rewrite_marker
 
 # 2. Compute SCTD
 python3 dynamic_stability/calculate_sctd.py \
-  --ready_jsonl ./metrics/ready/starcoder-15b/bigobench/original.ready.jsonl \
-  --out_jsonl ./metrics/sctd/starcoder-15b/bigobench/sctd_original.jsonl \
+  --ready_jsonl ./metrics/ready/starcoder2-15b/bigobench/original.ready.jsonl \
+  --out_jsonl ./metrics/sctd/starcoder2-15b/bigobench/sctd_original.jsonl \
   --store_centroid
 
 # 3. Compute DCTD
 python3 dynamic_stability/calculate_dctd.py \
   --dataset bigobench \
-  --ready_jsonl ./metrics/ready/starcoder-15b/bigobench/original.ready.jsonl \
-  --out_jsonl ./metrics/dctd/starcoder-15b/bigobench/dctd_original.jsonl \
+  --ready_jsonl ./metrics/ready/starcoder2-15b/bigobench/original.ready.jsonl \
+  --out_jsonl ./metrics/dctd/starcoder2-15b/bigobench/dctd_original.jsonl \
   --workers 16 \
   --timeout 15
 
 # 4. Merge and compute energy shift
 python3 dynamic_stability/merge_shift.py \
   --metric_prefix sctd \
-  --orig_jsonl ./metrics/sctd/starcoder-15b/bigobench/sctd_original.jsonl \
-  --iso_jsonl ./metrics/sctd/starcoder-15b/bigobench/sctd_iso.jsonl \
-  --out_jsonl ./metrics/sctd/starcoder-15b/bigobench/sctd_shift_original_vs_iso.jsonl
+  --orig_jsonl ./metrics/sctd/starcoder2-15b/bigobench/sctd_original.jsonl \
+  --iso_jsonl ./metrics/sctd/starcoder2-15b/bigobench/sctd_iso.jsonl \
+  --out_jsonl ./metrics/sctd/starcoder2-15b/bigobench/sctd_shift_original_vs_iso.jsonl
 
 # 5. Plot
 python3 metrics/plot_metric_shift.py \
-  --in_jsonl ./metrics/sctd/starcoder-15b/bigobench/sctd_shift_original_vs_iso.jsonl \
-  --out_png ./metrics/plots/starcoder-15b_bigobench_sctd_shift.png \
+  --in_jsonl ./metrics/sctd/starcoder2-15b/bigobench/sctd_shift_original_vs_iso.jsonl \
+  --out_png ./metrics/plots/starcoder2-15b_bigobench_sctd_shift.png \
   --y_key sctd_jsd
 ```
 
@@ -432,9 +434,18 @@ Quantifies the distribution shift magnitude between Original and ISO representat
 ## Requirements
 
 - Python 3.8+
+
+Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+Or individually:
 - `pyyaml`, `tqdm` (core dependencies)
 - `google-generativeai` (for Gemini models)
-- `transformers`, `torch`, `accelerate` (for HuggingFace models)
+- `transformers>=4.36.0`, `torch>=2.0.0`, `accelerate` (for HuggingFace models)
+- `scipy`, `numpy` (for metrics)
+- `matplotlib` (for plotting)
 
 ---
 

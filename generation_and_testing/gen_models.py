@@ -8,7 +8,7 @@ streaming JSONL with generated solutions.
 
 Supported Models:
 - Gemini: gemini-2.0-flash, gemini-2.5-pro (via Google API)
-- HuggingFace: starcoder-15b, codestral-22b (local GPU inference)
+- HuggingFace: starcoder2-15b, codestral-22b (local GPU inference)
 
 Features:
 - Retry with exponential backoff for transient failures (Gemini)
@@ -118,9 +118,9 @@ MODEL_CONFIGS = {
         "batch_size": 1,
     },
     # HuggingFace models (local GPU inference)
-    "starcoder-15b": {
+    "starcoder2-15b": {
         "backend": "huggingface",
-        "model_id": "bigcode/starcoder",
+        "model_id": "bigcode/starcoder2-15b",
         "workers": 1,       # Sequential for GPU
         "timeout": 300,
         "batch_size": 4,    # Batch for efficiency

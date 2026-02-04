@@ -1,0 +1,19 @@
+# Core dependencies
+pyyaml>=6.0
+tqdm>=4.65.0
+
+# Gemini API (for gemini-2.0-flash, gemini-2.5-pro)
+google-generativeai>=0.3.0
+
+# HuggingFace models (for starcoder2-15b, codestral-22b)
+# These are optional - only needed for local GPU inference
+transformers>=4.36.0
+torch>=2.0.0
+accelerate>=0.25.0
+
+# For metrics computation
+scipy>=1.10.0
+numpy>=1.24.0
+
+# For plotting
+matplotlib>=3.7.0

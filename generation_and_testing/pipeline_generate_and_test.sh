@@ -7,7 +7,7 @@
 #
 # Supports:
 #   - Gemini models (API-based): gemini-2.0-flash, gemini-2.5-pro
-#   - HuggingFace models (local GPU): starcoder-15b, codestral-22b
+#   - HuggingFace models (local GPU): starcoder2-15b, codestral-22b
 #
 
 set -e
@@ -45,7 +45,7 @@ Required:
   --dataset         Dataset to process (bigobench, effibench, or mbpp)
   --model           Model to use for generation:
                     - Gemini (API): gemini-2.0-flash, gemini-2.5-pro
-                    - HuggingFace (GPU): starcoder-15b, codestral-22b
+                    - HuggingFace (GPU): starcoder2-15b, codestral-22b
 
 Options:
   --temperature     LLM temperature (default: 0.0)
@@ -65,7 +65,7 @@ Examples:
   $0 --dataset bigobench --model gemini-2.0-flash --resume
 
   # Generate with StarCoder on MBPP original
-  $0 --dataset mbpp --model starcoder-15b --original --batch_size 4
+  $0 --dataset mbpp --model starcoder2-15b --original --batch_size 4
 
   # Generate with Codestral on EffiBench ISO
   $0 --dataset effibench --model codestral-22b --n_generations 5

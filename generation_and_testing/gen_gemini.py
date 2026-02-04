@@ -7,7 +7,7 @@ which supports both Gemini (API) and HuggingFace (local GPU) models.
 
 Supported models in gen_models.py:
 - gemini-2.0-flash, gemini-2.5-pro (API-based)
-- starcoder-15b, codestral-22b (HuggingFace, local GPU)
+- starcoder2-15b, codestral-22b (HuggingFace, local GPU)
 """
 
 import sys

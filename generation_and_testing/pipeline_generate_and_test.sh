@@ -25,6 +25,7 @@ RESUME_FLAG=""
 DATASETS_ROOT="./datasets"
 OUT_DIR="./results"
 ORIGINAL_FLAG=""
+ISO_SIMPLE_FLAG=""
 
 # Detect Python
 if command -v python3.10 &> /dev/null; then
@@ -56,6 +57,7 @@ Options:
   --config          Config YAML path (default: config.yaml)
   --resume          Resume from existing output
   --original        Use original datasets (default: ISO)
+  --iso_simple      Use ISO-simple (oracle-help) datasets
   --datasets_root   Datasets directory (default: ./datasets)
   --out_dir         Output directory (default: ./results)
   -h, --help        Show this help
@@ -66,6 +68,9 @@ Examples:
 
   # Generate with StarCoder on MBPP original
   $0 --dataset mbpp --model starcoder2-15b --original --batch_size 4
+
+  # Generate with Gemini on EffiBench ISO-simple
+  $0 --dataset effibench --model gemini-2.0-flash --iso_simple --resume
 
   # Generate with Codestral on EffiBench ISO
   $0 --dataset effibench --model codestral-22b --n_generations 5
@@ -115,6 +120,10 @@ while [[ $# -gt 0 ]]; do
             ORIGINAL_FLAG="--original"
             shift
             ;;
+        --iso_simple)
+            ISO_SIMPLE_FLAG="--iso_simple"
+            shift
+            ;;
         --datasets_root)
             DATASETS_ROOT="$2"
             shift 2
@@ -153,6 +162,11 @@ if [[ "$DATASET" != "bigobench" && "$DATASET" != "effibench" && "$DATASET" != "m
     exit 1
 fi
 
+if [[ -n "$ORIGINAL_FLAG" && -n "$ISO_SIMPLE_FLAG" ]]; then
+    echo "ERROR: --original and --iso_simple are mutually exclusive"
+    exit 1
+fi
+
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -177,6 +191,10 @@ if [[ -n "$ORIGINAL_FLAG" ]]; then
     GEN_ARGS="$GEN_ARGS $ORIGINAL_FLAG"
 fi
 
+if [[ -n "$ISO_SIMPLE_FLAG" ]]; then
+    GEN_ARGS="$GEN_ARGS $ISO_SIMPLE_FLAG"
+fi
+
 # Determine dataset subdirectory
 if [[ -n "$ORIGINAL_FLAG" ]]; then
     # Original datasets use different naming
@@ -185,6 +203,8 @@ if [[ -n "$ORIGINAL_FLAG" ]]; then
         effibench) ISO_DIR="effibench" ;;
         mbpp) ISO_DIR="mbpp" ;;
     esac
+elif [[ -n "$ISO_SIMPLE_FLAG" ]]; then
+    ISO_DIR="${DATASET}_iso_simple"
 else
     ISO_DIR="${DATASET}_iso"
 fi
@@ -194,7 +214,14 @@ echo "Part 2: Generation + Unittests Pipeline"
 echo "=========================================="
 echo "Dataset: $DATASET"
 echo "Model: $MODEL"
-echo "Mode: ${ORIGINAL_FLAG:-ISO}"
+if [[ -n "$ORIGINAL_FLAG" ]]; then
+    MODE_STR="ORIGINAL"
+elif [[ -n "$ISO_SIMPLE_FLAG" ]]; then
+    MODE_STR="ISO_SIMPLE"
+else
+    MODE_STR="ISO"
+fi
+echo "Mode: $MODE_STR"
 echo "Temperature: $TEMPERATURE"
 echo "N generations: $N_GENERATIONS"
 echo "Max problems: ${MAX_PROBLEMS:-all}"

@@ -5,6 +5,7 @@ apply_isomorphisms.py - Main driver to produce transformed JSONLs with invertibi
 Usage:
     python apply_isomorphisms.py --dataset bigobench --iso_family affine_int --seed 1
     python apply_isomorphisms.py --dataset effibench --iso_family affine_int --seed 1 --identity_control
+    python apply_isomorphisms.py --dataset mbpp --iso_family affine_int --seed 1 --oracle_help_inputs
 """
 
 import argparse
@@ -57,7 +58,8 @@ def process_row(
     schema_report: Optional[Dict],
     iso_family: str,
     seed: int,
-    identity_control: bool
+    identity_control: bool,
+    oracle_help_inputs: bool
 ) -> Dict[str, Any]:
     """
     Process a single row: extract, transform, verify, rebuild.
@@ -78,6 +80,7 @@ def process_row(
                     "iso_family": iso_family,
                     "iso_seed": seed,
                     "iso_params": params,
+                    "iso_variant": "iso_simple" if oracle_help_inputs else "iso",
                     "iso_proof": {
                         "roundtrip_ok": False,
                         "n_checked": 0,
@@ -99,6 +102,12 @@ def process_row(
         # Append contract to prompt
         prompt_with_contract = append_contract_to_prompt(prompt, contract)
         
+        # Oracle-help ablation: show both encoded and decoded inputs
+        if oracle_help_inputs and hasattr(adapter, "format_oracle_help_inputs"):
+            oracle_block = adapter.format_oracle_help_inputs(tests, tests_transformed)
+            if oracle_block:
+                prompt_with_contract = append_contract_to_prompt(prompt_with_contract, oracle_block)
+        
         # Verify roundtrip (unless identity)
         if identity_control or not samples:
             proof = {
@@ -119,7 +128,8 @@ def process_row(
                 "iso_family": iso_family if not identity_control else "identity",
                 "iso_seed": seed,
                 "iso_params": params,
-                "iso_proof": proof
+                "iso_proof": proof,
+                "iso_variant": "iso_simple" if oracle_help_inputs else "iso"
             }
         )
     
@@ -134,6 +144,7 @@ def process_row(
                 "iso_family": iso_family,
                 "iso_seed": seed,
                 "iso_params": params,
+                "iso_variant": "iso_simple" if oracle_help_inputs else "iso",
                 "iso_proof": {
                     "roundtrip_ok": False,
                     "n_checked": 0,
@@ -154,6 +165,7 @@ def process_file(
     iso_family: str,
     seed: int,
     identity_control: bool,
+    oracle_help_inputs: bool,
     max_rows: Optional[int] = None,
     dry_run: bool = False
 ) -> Dict[str, int]:
@@ -198,7 +210,7 @@ def process_file(
                 # Process the row
                 new_row = process_row(
                     row, adapter, transform, params,
-                    schema_report, iso_family, seed, identity_control
+                    schema_report, iso_family, seed, identity_control, oracle_help_inputs
                 )
                 
                 stats["processed"] += 1
@@ -246,14 +258,19 @@ def main():
                         help="Show what would be done without processing")
     parser.add_argument("--identity_control", action="store_true",
                         help="Apply identity transform (control experiment)")
+    parser.add_argument("--oracle_help_inputs", action="store_true",
+                        help="Oracle-help ablation: show decoded inputs alongside encoded inputs")
     
     args = parser.parse_args()
     
     # Paths
     datasets_root = Path(args.datasets_root)
-    # Default output to datasets/<dataset>_iso
+    # Default output to datasets/<dataset>_iso or <dataset>_iso_simple
     if args.out_root is None:
-        out_root = datasets_root / f"{args.dataset}_iso"
+        if args.oracle_help_inputs:
+            out_root = datasets_root / f"{args.dataset}_iso_simple"
+        else:
+            out_root = datasets_root / f"{args.dataset}_iso"
     else:
         out_root = Path(args.out_root)
     reports_dir = Path(args.reports_dir)
@@ -276,6 +293,7 @@ def main():
     print(f"Params: {params}")
     print(f"Seed: {args.seed}")
     print(f"Identity control: {args.identity_control}")
+    print(f"Oracle-help inputs: {args.oracle_help_inputs}")
     print()
     
     # Find input files
@@ -303,7 +321,8 @@ def main():
         stats = process_file(
             input_file, output_file, adapter, transform, params,
             schema_report, args.iso_family, args.seed,
-            args.identity_control, args.max_rows, args.dry_run
+            args.identity_control, args.oracle_help_inputs,
+            args.max_rows, args.dry_run
         )
         
         for k, v in stats.items():

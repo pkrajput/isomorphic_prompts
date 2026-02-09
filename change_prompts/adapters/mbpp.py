@@ -56,6 +56,13 @@ class MBPPAdapter:
         if match:
             return match.group(1).strip(), match.group(2).strip(), assert_str
         return "", "", assert_str
+
+    def _extract_args_from_func_call(self, func_call: str) -> str:
+        """Extract argument string from a function call."""
+        match = re.match(r'\w+\s*\((.*)\)$', func_call.strip())
+        if match:
+            return match.group(1).strip()
+        return ""
     
     def _transform_io_value(self, value: str, transform: Transform, params: Dict[str, Any]) -> str:
         """Apply transform to a single I/O value."""
@@ -115,6 +122,48 @@ class MBPPAdapter:
                 transformed.append(original)
         
         return transformed, samples
+
+    def format_oracle_help_inputs(
+        self,
+        tests: List[str],
+        tests_transformed: List[str]
+    ) -> str:
+        """
+        Format oracle-help input pairs (encoded vs decoded) for prompts.
+        Only inputs are shown; outputs remain encoded per contract.
+        """
+        if not tests or not tests_transformed:
+            return ""
+        
+        pairs = []
+        for idx, (orig, enc) in enumerate(zip(tests, tests_transformed)):
+            orig_call, _, _ = self._extract_values_from_assert(orig)
+            enc_call, _, _ = self._extract_values_from_assert(enc)
+            orig_args = self._extract_args_from_func_call(orig_call)
+            enc_args = self._extract_args_from_func_call(enc_call)
+            if orig_args or enc_args:
+                label = f"test #{idx + 1}"
+                pairs.append((label, enc_args, orig_args))
+        
+        if not pairs:
+            return ""
+        
+        lines = [
+            "### Oracle-Provided Decoded Inputs",
+            "The inputs below are provided in both encoded and decoded form.",
+            "Use the decoded inputs to solve the task, but return ONLY encoded outputs.",
+            "",
+        ]
+        
+        for label, enc_args, orig_args in pairs:
+            lines.append(f"Test case: {label}")
+            lines.append("Encoded input args:")
+            lines.append(enc_args)
+            lines.append("Decoded input args (oracle-provided):")
+            lines.append(orig_args)
+            lines.append("---")
+        
+        return "\n".join(lines).strip()
     
     def rebuild_row(
         self,
@@ -138,6 +187,7 @@ class MBPPAdapter:
         new_row["iso_family"] = meta.get("iso_family", "")
         new_row["iso_seed"] = meta.get("iso_seed", 0)
         new_row["iso_params"] = meta.get("iso_params", {})
+        new_row["iso_variant"] = meta.get("iso_variant", "")
         new_row["iso_proof"] = meta.get("iso_proof", {})
         
         return new_row

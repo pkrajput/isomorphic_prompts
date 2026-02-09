@@ -33,8 +33,11 @@ By measuring execution phenotype drift (DCTD/DMPD) across isomorphic representat
 │   ├── Effibench/                # Original EffiBench
 │   ├── mbpp/                     # Original MBPP
 │   ├── bigobench_iso/            # ISO-transformed BigOBench
+│   ├── bigobench_iso_simple/     # ISO-simple (oracle-help) BigOBench
 │   ├── effibench_iso/            # ISO-transformed EffiBench
-│   └── mbpp_iso/                 # ISO-transformed MBPP
+│   ├── effibench_iso_simple/     # ISO-simple (oracle-help) EffiBench
+│   ├── mbpp_iso/                 # ISO-transformed MBPP
+│   └── mbpp_iso_simple/          # ISO-simple (oracle-help) MBPP
 ├── generation_and_testing/       # Part 2: Generation + Unittests
 │   ├── gen_models.py             # Multi-backend generation script
 │   ├── run_unittests.py          # Dataset-specific unittests
@@ -108,6 +111,7 @@ hf_token: "your-hf-token"
 ### Part 1: Apply I/O Isomorphisms (Already Done)
 
 Isomorphic datasets are pre-generated in `./datasets/*_iso/`.
+Oracle-help ablations are pre-generated in `./datasets/*_iso_simple/`.
 
 ```bash
 # To regenerate (optional):
@@ -117,6 +121,15 @@ python change_prompts/apply_isomorphisms.py \
   --out_root ./datasets/bigobench_iso \
   --iso_family affine_int \
   --seed 42
+
+# ISO-simple (oracle-help inputs)
+python change_prompts/apply_isomorphisms.py \
+  --dataset bigobench \
+  --datasets_root ./datasets \
+  --out_root ./datasets/bigobench_iso_simple \
+  --iso_family affine_int \
+  --seed 42 \
+  --oracle_help_inputs
 ```
 
 ### Part 2: Generation + Unittests
@@ -128,6 +141,14 @@ python change_prompts/apply_isomorphisms.py \
 ./generation_and_testing/pipeline_generate_and_test.sh \
   --dataset bigobench \
   --model gemini-2.0-flash \
+  --n_generations 5 \
+  --resume
+
+# BigOBench with Gemini 2.0 Flash (ISO-simple / oracle-help)
+./generation_and_testing/pipeline_generate_and_test.sh \
+  --dataset bigobench \
+  --model gemini-2.0-flash \
+  --iso_simple \
   --n_generations 5 \
   --resume
 
@@ -286,6 +307,15 @@ python3 ./generation_and_testing/gen_models.py \
   --model starcoder2-15b \
   --n_generations 5 \
   --batch_size 4 \
+  --config config.yaml \
+  --resume
+
+# ISO-simple (oracle-help) dataset
+python3 ./generation_and_testing/gen_models.py \
+  --dataset effibench \
+  --model gemini-2.0-flash \
+  --iso_simple \
+  --n_generations 5 \
   --config config.yaml \
   --resume
 

@@ -73,7 +73,14 @@ def load_existing_results(output_path: str) -> set:
     return existing
 
 
-def load_original_tests(datasets_root: str, dataset: str, source_file: str, row_index: int, is_original: bool = False) -> Optional[dict]:
+def load_original_tests(
+    datasets_root: str,
+    dataset: str,
+    source_file: str,
+    row_index: int,
+    is_original: bool = False,
+    iso_variant: Optional[str] = None
+) -> Optional[dict]:
     """
     Load tests from the dataset file.
     
@@ -94,7 +101,10 @@ def load_original_tests(datasets_root: str, dataset: str, source_file: str, row_
         }
         data_dir = dir_mapping.get(dataset, dataset)
     else:
-        data_dir = f"{dataset}_iso"
+        if iso_variant == "iso_simple":
+            data_dir = f"{dataset}_iso_simple"
+        else:
+            data_dir = f"{dataset}_iso"
     
     data_path = Path(datasets_root) / data_dir / source_file
     
@@ -313,11 +323,13 @@ def main():
             source_file = record.get("source_file", "")
             row_index = record.get("row_index", 0)
             is_original = record.get("is_original", False)
-            cache_key = (source_file, row_index, is_original)
+            iso_variant = record.get("iso_variant")
+            cache_key = (source_file, row_index, is_original, iso_variant)
             
             if cache_key not in tests_cache:
                 tests_obj = load_original_tests(
-                    args.datasets_root, args.dataset, source_file, row_index, is_original
+                    args.datasets_root, args.dataset, source_file, row_index,
+                    is_original=is_original, iso_variant=iso_variant
                 )
                 tests_cache[cache_key] = tests_obj
             

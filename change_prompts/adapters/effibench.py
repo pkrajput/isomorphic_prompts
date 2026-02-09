@@ -105,6 +105,46 @@ class EffiBenchAdapter:
             transformed.append(new_test)
         
         return transformed, samples
+
+    def format_oracle_help_inputs(
+        self,
+        tests: List[Dict[str, str]],
+        tests_transformed: List[Dict[str, str]]
+    ) -> str:
+        """
+        Format oracle-help input pairs (encoded vs decoded) for prompts.
+        Only inputs are shown; outputs remain encoded per contract.
+        """
+        if not tests or not tests_transformed:
+            return ""
+        
+        pairs = []
+        for idx, (orig, enc) in enumerate(zip(tests, tests_transformed)):
+            orig_in = orig.get("input", "")
+            enc_in = enc.get("input", "")
+            if orig_in or enc_in:
+                label = f"test #{idx + 1}"
+                pairs.append((label, enc_in, orig_in))
+        
+        if not pairs:
+            return ""
+        
+        lines = [
+            "### Oracle-Provided Decoded Inputs",
+            "The inputs below are provided in both encoded and decoded form.",
+            "Use the decoded inputs to solve the task, but return ONLY encoded outputs.",
+            "",
+        ]
+        
+        for label, enc_in, orig_in in pairs:
+            lines.append(f"Test case: {label}")
+            lines.append("Encoded input:")
+            lines.append(enc_in)
+            lines.append("Decoded input (oracle-provided):")
+            lines.append(orig_in)
+            lines.append("---")
+        
+        return "\n".join(lines).strip()
     
     def rebuild_row(
         self,
@@ -130,6 +170,7 @@ class EffiBenchAdapter:
         new_row["iso_family"] = meta.get("iso_family", "")
         new_row["iso_seed"] = meta.get("iso_seed", 0)
         new_row["iso_params"] = meta.get("iso_params", {})
+        new_row["iso_variant"] = meta.get("iso_variant", "")
         new_row["iso_proof"] = meta.get("iso_proof", {})
         
         return new_row

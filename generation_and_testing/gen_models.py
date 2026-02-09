@@ -75,6 +75,31 @@ DATASETS_CONFIG_ISO = {
     },
 }
 
+# Config for ISO-simple (oracle-help) datasets
+DATASETS_CONFIG_ISO_SIMPLE = {
+    "bigobench": {
+        "data_dir": "bigobench_iso_simple",
+        "prompt_field": "prompt_with_contract",
+        "fallback_prompt_fields": ["description", "prompt"],
+        "problem_id_field": "problem_id",
+        "starter_code_field": None,
+    },
+    "effibench": {
+        "data_dir": "effibench_iso_simple",
+        "prompt_field": "prompt_with_contract",
+        "fallback_prompt_fields": ["prompt"],
+        "problem_id_field": "id",
+        "starter_code_field": "starter_code_python3",
+    },
+    "mbpp": {
+        "data_dir": "mbpp_iso_simple",
+        "prompt_field": "prompt_with_contract",
+        "fallback_prompt_fields": ["prompt"],
+        "problem_id_field": "task_id",
+        "starter_code_field": None,
+    },
+}
+
 # Config for ORIGINAL (non-perturbed) datasets
 DATASETS_CONFIG_ORIGINAL = {
     "bigobench": {
@@ -678,6 +703,7 @@ def build_record(
         "latency_s": latency,
         "is_original": task.get("is_original", False),
         "iso_applied": task.get("iso_applied"),
+        "iso_variant": task.get("iso_variant"),
         "iso_family": task.get("iso_family"),
         "iso_seed": task.get("iso_seed"),
         "iso_params": task.get("iso_params"),
@@ -725,12 +751,16 @@ def build_tasks(
     resume_set: set,
     only_iso_applied: bool,
     use_original: bool = False,
+    use_iso_simple: bool = False,
 ) -> list[dict]:
     """Build list of generation tasks from dataset files."""
     # Select config based on original vs iso
     if use_original:
         config = DATASETS_CONFIG_ORIGINAL[dataset]
         prompt_wrapper = PROMPT_WRAPPER_ORIGINAL
+    elif use_iso_simple:
+        config = DATASETS_CONFIG_ISO_SIMPLE[dataset]
+        prompt_wrapper = PROMPT_WRAPPER_ISO
     else:
         config = DATASETS_CONFIG_ISO[dataset]
         prompt_wrapper = PROMPT_WRAPPER_ISO
@@ -811,6 +841,7 @@ def build_tasks(
                         "prompt_used": prompt_used,
                         "is_original": use_original,
                         "iso_applied": iso_applied,
+                        "iso_variant": "iso_simple" if use_iso_simple else ("iso" if not use_original else None),
                         "iso_family": row.get("iso_family") if not use_original else None,
                         "iso_seed": row.get("iso_seed") if not use_original else None,
                         "iso_params": row.get("iso_params") if not use_original else None,
@@ -834,10 +865,13 @@ def get_output_path(
     temperature: float,
     n_generations: int,
     use_original: bool = False,
+    use_iso_simple: bool = False,
 ) -> str:
     """Build output path following the required naming convention."""
     if use_original:
         dataset_subdir = DATASETS_CONFIG_ORIGINAL[dataset]["data_dir"].lower()
+    elif use_iso_simple:
+        dataset_subdir = DATASETS_CONFIG_ISO_SIMPLE[dataset]["data_dir"]
     else:
         dataset_subdir = DATASETS_CONFIG_ISO[dataset]["data_dir"]
     
@@ -1003,6 +1037,8 @@ def main():
     parser.add_argument("--only_iso_applied", action="store_true")
     parser.add_argument("--original", action="store_true",
                         help="Use original (non-perturbed) datasets instead of ISO-transformed")
+    parser.add_argument("--iso_simple", action="store_true",
+                        help="Use ISO-simple (oracle-help) datasets")
     
     args = parser.parse_args()
     
@@ -1017,10 +1053,17 @@ def main():
     
     config = load_config(args.config)
     
-    # Select dataset config based on --original flag
+    if args.original and args.iso_simple:
+        print("ERROR: --original and --iso_simple are mutually exclusive", file=sys.stderr)
+        sys.exit(1)
+    
+    # Select dataset config based on flags
     use_original = args.original
+    use_iso_simple = args.iso_simple
     if use_original:
         dataset_config = DATASETS_CONFIG_ORIGINAL[args.dataset]
+    elif use_iso_simple:
+        dataset_config = DATASETS_CONFIG_ISO_SIMPLE[args.dataset]
     else:
         dataset_config = DATASETS_CONFIG_ISO[args.dataset]
     
@@ -1035,10 +1078,15 @@ def main():
     output_path = get_output_path(
         args.out_dir, args.model, args.dataset,
         source_file, args.temperature, args.n_generations,
-        use_original=use_original
+        use_original=use_original, use_iso_simple=use_iso_simple
     )
     
-    mode_str = "ORIGINAL" if use_original else "ISO"
+    if use_original:
+        mode_str = "ORIGINAL"
+    elif use_iso_simple:
+        mode_str = "ISO_SIMPLE"
+    else:
+        mode_str = "ISO"
     print(f"Dataset: {args.dataset} ({mode_str})")
     print(f"Model: {args.model} (backend: {backend})")
     print(f"Temperature: {args.temperature}")
@@ -1060,7 +1108,7 @@ def main():
         args.dataset, args.datasets_root, args.model,
         args.n_generations, args.max_problems,
         resume_set, args.only_iso_applied,
-        use_original=use_original
+        use_original=use_original, use_iso_simple=use_iso_simple
     )
     
     print(f"Tasks to process: {len(tasks)}")

@@ -11,7 +11,7 @@
 #
 # Example:
 #   ./dynamic_stability/run_metrics.sh --model gemini-2.0-flash --datasets bigobench,effibench,mbpp
-#   ./dynamic_stability/run_metrics.sh --model starcoder2-15b --datasets mbpp --dctd_only
+#   ./dynamic_stability/run_metrics.sh --model starcoder-15b --datasets mbpp --dctd_only
 #
 
 set -e
@@ -44,7 +44,7 @@ Usage: $0 --model <model> [OPTIONS]
 Compute SCTD/DCTD metrics and energy shift analysis for Original vs ISO conditions.
 
 Required:
-  --model           Model name (e.g., gemini-2.0-flash, starcoder2-15b)
+  --model           Model name (e.g., gemini-2.0-flash, starcoder-15b)
 
 Options:
   --datasets        Comma-separated datasets (default: bigobench,effibench,mbpp)
@@ -63,7 +63,7 @@ Examples:
   $0 --model gemini-2.0-flash
 
   # Only DCTD for a specific dataset
-  $0 --model starcoder2-15b --datasets mbpp --dctd_only
+  $0 --model starcoder-15b --datasets mbpp --dctd_only
 
   # Quick SCTD-only analysis
   $0 --model codestral-22b --sctd_only --skip_plots

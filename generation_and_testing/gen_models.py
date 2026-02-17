@@ -201,7 +201,7 @@ MODEL_CONFIGS = {
         "torch_dtype": "bfloat16",
         "device_map": "auto",
     },
-    "deepseek-coder-v2-lite": {
+    "deepseek-coder-v2-lite-instruct": {
         "backend": "huggingface",
         "model_id": "deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct",
         "workers": 1,

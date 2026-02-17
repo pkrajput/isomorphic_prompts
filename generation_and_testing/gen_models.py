@@ -30,6 +30,15 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Optional
 
+# Patch for DeepSeek-Coder-V2 remote code that imports a function
+# removed in newer transformers (>= 4.42).
+try:
+    import transformers.utils.import_utils as _tiu
+    if not hasattr(_tiu, "is_torch_fx_available"):
+        _tiu.is_torch_fx_available = lambda: False
+except ImportError:
+    pass
+
 import yaml
 from tqdm import tqdm
 

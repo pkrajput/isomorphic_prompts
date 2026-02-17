@@ -125,6 +125,19 @@ DATASETS_CONFIG_ORIGINAL = {
     },
 }
 
+# Valid fuzz tags (created by change_prompts/prompt_fuzzing.py)
+VALID_FUZZ_TAGS = ["synonym_20", "synonym_40", "deadcode"]
+
+def get_fuzz_config(dataset: str, fuzz_tag: str) -> dict:
+    """Build a dataset config for a fuzzed variant.
+
+    Fuzzed datasets reuse the same schema as ORIGINAL but live in a
+    different directory (e.g. ``bigobench_synonym_20``).
+    """
+    base = dict(DATASETS_CONFIG_ORIGINAL[dataset])
+    base["data_dir"] = f"{dataset}_{fuzz_tag}"
+    return base
+
 # Model configurations
 MODEL_CONFIGS = {
     # Gemini models (API-based)
@@ -166,6 +179,61 @@ MODEL_CONFIGS = {
         "trust_remote_code": True,
         "torch_dtype": "bfloat16",
         "device_map": "auto",
+    },
+    # Additional Gemini models
+    "gemini-2.5-flash": {
+        "backend": "gemini",
+        "model_id": "gemini-2.5-flash",
+        "workers": 50,
+        "timeout": 120,
+        "batch_size": 1,
+    },
+    # Additional HuggingFace models
+    "codellama-13b": {
+        "backend": "huggingface",
+        "model_id": "codellama/CodeLlama-13b-Instruct-hf",
+        "workers": 1,
+        "timeout": 300,
+        "batch_size": 2,
+        "max_new_tokens": 2048,
+        "use_chat_template": True,
+        "trust_remote_code": True,
+        "torch_dtype": "bfloat16",
+        "device_map": "auto",
+    },
+    "deepseek-coder-v2-lite": {
+        "backend": "huggingface",
+        "model_id": "deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct",
+        "workers": 1,
+        "timeout": 300,
+        "batch_size": 2,
+        "max_new_tokens": 2048,
+        "use_chat_template": True,
+        "trust_remote_code": True,
+        "torch_dtype": "bfloat16",
+        "device_map": "auto",
+    },
+    # OpenRouter models (API-based, OpenAI-compatible)
+    "qwen3-coder": {
+        "backend": "openrouter",
+        "model_id": "qwen/qwen3-coder",
+        "workers": 30,
+        "timeout": 120,
+        "batch_size": 1,
+    },
+    "gpt-4o-mini": {
+        "backend": "openrouter",
+        "model_id": "openai/gpt-4o-mini",
+        "workers": 30,
+        "timeout": 120,
+        "batch_size": 1,
+    },
+    "gpt-5.1-codex-mini": {
+        "backend": "openrouter",
+        "model_id": "openai/gpt-5.1-codex-mini",
+        "workers": 20,
+        "timeout": 180,
+        "batch_size": 1,
     },
 }
 
@@ -431,6 +499,113 @@ def generate_gemini_with_retry(
     last_metadata["exhausted_retries"] = True
     final_error = f"RETRY_EXHAUSTED({max_retries + 1}): {last_error}"
     return "", None, final_error, total_latency, last_metadata
+
+
+# =============================================================================
+# OPENROUTER BACKEND (OpenAI-compatible)
+# =============================================================================
+
+def generate_openrouter_single(
+    api_key: str,
+    model_id: str,
+    prompt: str,
+    temperature: float,
+    timeout: int,
+) -> tuple[str, Optional[str], Optional[str], float, dict]:
+    """
+    Generate a single completion via OpenRouter (OpenAI-compatible chat API).
+    Returns (raw_output, finish_reason, error_message, latency_s, metadata).
+    """
+    import requests as _requests
+
+    start_time = time.time()
+    metadata = {}
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://github.com/code-review",
+    }
+    payload = {
+        "model": model_id,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": temperature,
+        "max_tokens": 4096,
+    }
+
+    try:
+        resp = _requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=timeout,
+        )
+        latency = time.time() - start_time
+
+        if resp.status_code != 200:
+            error_body = resp.text[:500]
+            return "", None, f"HTTP_{resp.status_code}: {error_body}", latency, metadata
+
+        body = resp.json()
+        choices = body.get("choices", [])
+        if not choices:
+            return "", None, "No choices in OpenRouter response", latency, metadata
+
+        choice = choices[0]
+        finish_reason = choice.get("finish_reason")
+        metadata["finish_reason"] = finish_reason
+        metadata["model_returned"] = body.get("model", model_id)
+
+        text = choice.get("message", {}).get("content", "")
+        if text and text.strip():
+            return text, finish_reason, None, latency, metadata
+        else:
+            return "", finish_reason, "Empty content in response", latency, metadata
+
+    except Exception as e:
+        latency = time.time() - start_time
+        metadata["exception_type"] = type(e).__name__
+        return "", None, f"OPENROUTER_ERROR: {str(e)[:500]}", latency, metadata
+
+
+def generate_openrouter_with_retry(
+    api_key: str,
+    model_id: str,
+    prompt: str,
+    temperature: float,
+    timeout: int,
+    max_retries: int,
+) -> tuple[str, Optional[str], Optional[str], float, dict]:
+    """Generate with retry for transient OpenRouter failures."""
+    total_latency = 0.0
+    last_error = None
+    last_metadata = {}
+
+    for attempt in range(max_retries + 1):
+        raw_output, finish_reason, error_message, latency, metadata = generate_openrouter_single(
+            api_key, model_id, prompt, temperature, timeout
+        )
+        total_latency += latency
+        last_metadata = metadata
+        last_metadata["attempt"] = attempt + 1
+
+        if raw_output and raw_output.strip():
+            last_metadata["total_attempts"] = attempt + 1
+            return raw_output, finish_reason, None, total_latency, last_metadata
+
+        if error_message and is_retryable_error(error_message):
+            last_error = error_message
+            if attempt < max_retries:
+                delay = compute_backoff_delay(attempt)
+                time.sleep(delay)
+                continue
+        else:
+            last_metadata["total_attempts"] = attempt + 1
+            return raw_output, finish_reason, error_message, total_latency, last_metadata
+
+    last_metadata["total_attempts"] = max_retries + 1
+    last_metadata["exhausted_retries"] = True
+    return "", None, f"RETRY_EXHAUSTED({max_retries + 1}): {last_error}", total_latency, last_metadata
 
 
 # =============================================================================
@@ -702,6 +877,7 @@ def build_record(
         "error_message": error_message,
         "latency_s": latency,
         "is_original": task.get("is_original", False),
+        "fuzz_tag": task.get("fuzz_tag"),
         "iso_applied": task.get("iso_applied"),
         "iso_variant": task.get("iso_variant"),
         "iso_family": task.get("iso_family"),
@@ -752,10 +928,14 @@ def build_tasks(
     only_iso_applied: bool,
     use_original: bool = False,
     use_iso_simple: bool = False,
+    fuzz_tag: Optional[str] = None,
 ) -> list[dict]:
     """Build list of generation tasks from dataset files."""
-    # Select config based on original vs iso
-    if use_original:
+    # Select config based on mode
+    if fuzz_tag:
+        config = get_fuzz_config(dataset, fuzz_tag)
+        prompt_wrapper = PROMPT_WRAPPER_ORIGINAL
+    elif use_original:
         config = DATASETS_CONFIG_ORIGINAL[dataset]
         prompt_wrapper = PROMPT_WRAPPER_ORIGINAL
     elif use_iso_simple:
@@ -830,6 +1010,7 @@ def build_tasks(
                     if key in resume_set:
                         continue  # Skip already completed
                     
+                    is_plain = use_original or fuzz_tag
                     task = {
                         "dataset": dataset,
                         "model": model_name,
@@ -839,12 +1020,14 @@ def build_tasks(
                         "row_index": row_index,
                         "completion_index": comp_idx,
                         "prompt_used": prompt_used,
-                        "is_original": use_original,
-                        "iso_applied": iso_applied,
-                        "iso_variant": "iso_simple" if use_iso_simple else ("iso" if not use_original else None),
-                        "iso_family": row.get("iso_family") if not use_original else None,
-                        "iso_seed": row.get("iso_seed") if not use_original else None,
-                        "iso_params": row.get("iso_params") if not use_original else None,
+                        "is_original": use_original and not fuzz_tag,
+                        "fuzz_tag": fuzz_tag,
+                        "iso_applied": iso_applied if not is_plain else None,
+                        "iso_variant": ("iso_simple" if use_iso_simple
+                                        else ("iso" if not is_plain else None)),
+                        "iso_family": row.get("iso_family") if not is_plain else None,
+                        "iso_seed": row.get("iso_seed") if not is_plain else None,
+                        "iso_params": row.get("iso_params") if not is_plain else None,
                         "row_meta": warnings,
                     }
                     tasks.append(task)
@@ -866,9 +1049,12 @@ def get_output_path(
     n_generations: int,
     use_original: bool = False,
     use_iso_simple: bool = False,
+    fuzz_tag: Optional[str] = None,
 ) -> str:
     """Build output path following the required naming convention."""
-    if use_original:
+    if fuzz_tag:
+        dataset_subdir = f"{dataset}_{fuzz_tag}"
+    elif use_original:
         dataset_subdir = DATASETS_CONFIG_ORIGINAL[dataset]["data_dir"].lower()
     elif use_iso_simple:
         dataset_subdir = DATASETS_CONFIG_ISO_SIMPLE[dataset]["data_dir"]
@@ -1007,27 +1193,125 @@ def run_huggingface_pipeline(
     print(f"Errors: {errors} ({100*errors/max(1,completed):.1f}%)")
 
 
+# =============================================================================
+# OPENROUTER PIPELINE
+# =============================================================================
+
+def process_openrouter_task(
+    api_key: str,
+    model_id: str,
+    task: dict,
+    temperature: float,
+    timeout: int,
+    max_retries: int,
+) -> dict:
+    """Process a single OpenRouter generation task with retry support."""
+    prompt_used = task["prompt_used"]
+
+    raw_output, finish_reason, error_message, latency, metadata = generate_openrouter_with_retry(
+        api_key, model_id, prompt_used, temperature, timeout, max_retries
+    )
+
+    generated_solution = ""
+    if not error_message and raw_output:
+        generated_solution = extract_python_code(raw_output)
+        is_valid, ast_error = validate_python_ast(generated_solution)
+        if not is_valid:
+            if error_message:
+                error_message = f"{error_message}; {ast_error}"
+            else:
+                error_message = ast_error
+
+    return build_record(task, temperature, prompt_used, raw_output, generated_solution,
+                        finish_reason, error_message, latency, metadata)
+
+
+def run_openrouter_pipeline(
+    args,
+    config: dict,
+    model_config: dict,
+    tasks: list[dict],
+    output_path: str,
+):
+    """Run generation pipeline with OpenRouter backend."""
+    api_key = config.get("openrouter_api_key")
+    if not api_key:
+        print("ERROR: openrouter_api_key not found in config.yaml", file=sys.stderr)
+        sys.exit(1)
+
+    model_id = model_config["model_id"]
+    workers = args.workers if args.workers is not None else model_config.get("workers", 20)
+    timeout = args.timeout if args.timeout is not None else model_config.get("timeout", 120)
+
+    completed = 0
+    errors = 0
+    retried = 0
+
+    with open(output_path, "a") as out_file:
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = {
+                executor.submit(
+                    process_openrouter_task, api_key, model_id, task,
+                    args.temperature, timeout, args.max_retries
+                ): task
+                for task in tasks
+            }
+
+            with tqdm(total=len(tasks), desc="Generating") as pbar:
+                for future in as_completed(futures):
+                    try:
+                        record = future.result()
+                        out_file.write(json.dumps(record) + "\n")
+                        out_file.flush()
+
+                        if record.get("error_message"):
+                            errors += 1
+
+                        gen_meta = record.get("generation_metadata", {})
+                        if gen_meta.get("total_attempts", 1) > 1:
+                            retried += 1
+
+                        completed += 1
+
+                    except Exception as e:
+                        task = futures[future]
+                        error_record = build_record(
+                            task, args.temperature, task["prompt_used"],
+                            "", "", None, f"WORKER_ERROR: {str(e)[:500]}", 0.0,
+                            {"exception_type": type(e).__name__}
+                        )
+                        out_file.write(json.dumps(error_record) + "\n")
+                        out_file.flush()
+                        errors += 1
+
+                    pbar.update(1)
+
+    print(f"\nCompleted: {completed}")
+    print(f"Errors: {errors} ({100*errors/max(1,completed):.1f}%)")
+    print(f"Retried: {retried} ({100*retried/max(1,completed):.1f}%)")
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate N completions per problem using Gemini or HuggingFace models."
+        description="Generate N completions per problem using Gemini, HuggingFace, or OpenRouter models."
     )
     parser.add_argument("--dataset", required=True, choices=["bigobench", "effibench", "mbpp"])
     parser.add_argument("--datasets_root", default="./datasets")
     parser.add_argument("--out_dir", default="./results")
-    parser.add_argument("--model", required=True, 
+    parser.add_argument("--model", required=True,
                         choices=list(MODEL_CONFIGS.keys()),
                         help="Model to use for generation")
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--n_generations", type=int, default=5)
     parser.add_argument("--max_problems", type=int, default=None)
     parser.add_argument("--workers", type=int, default=None,
-                        help="Parallel workers for Gemini (default: model-specific)")
+                        help="Parallel workers for API backends (default: model-specific)")
     parser.add_argument("--batch_size", type=int, default=None,
                         help="Batch size for HuggingFace (default: model-specific)")
     parser.add_argument("--timeout", type=int, default=None,
-                        help="API timeout in seconds for Gemini (default: model-specific)")
+                        help="API timeout in seconds (default: model-specific)")
     parser.add_argument("--max_retries", type=int, default=6,
-                        help="Max retries for transient failures (Gemini only, default: 6)")
+                        help="Max retries for transient failures (API backends, default: 6)")
     parser.add_argument("--config", default="config.yaml")
     parser.add_argument("--resume", action="store_true",
                         help="Resume from existing output, skip all completed entries")
@@ -1039,49 +1323,62 @@ def main():
                         help="Use original (non-perturbed) datasets instead of ISO-transformed")
     parser.add_argument("--iso_simple", action="store_true",
                         help="Use ISO-simple (oracle-help) datasets")
-    
+    parser.add_argument("--fuzz", type=str, default=None,
+                        choices=VALID_FUZZ_TAGS,
+                        help="Use a fuzzed dataset variant (e.g. synonym_20, synonym_40, deadcode)")
+
     args = parser.parse_args()
-    
+
     # Get model config
     model_config = MODEL_CONFIGS[args.model]
     backend = model_config["backend"]
-    
+
     # Load config
     if not os.path.exists(args.config):
         print(f"ERROR: Config file not found: {args.config}", file=sys.stderr)
         sys.exit(1)
-    
+
     config = load_config(args.config)
-    
-    if args.original and args.iso_simple:
-        print("ERROR: --original and --iso_simple are mutually exclusive", file=sys.stderr)
+
+    # Mutual exclusivity
+    mode_flags = sum([args.original, args.iso_simple, args.fuzz is not None])
+    if mode_flags > 1:
+        print("ERROR: --original, --iso_simple, and --fuzz are mutually exclusive",
+              file=sys.stderr)
         sys.exit(1)
-    
-    # Select dataset config based on flags
+
     use_original = args.original
     use_iso_simple = args.iso_simple
-    if use_original:
+    fuzz_tag = args.fuzz
+
+    # Select dataset config based on flags
+    if fuzz_tag:
+        dataset_config = get_fuzz_config(args.dataset, fuzz_tag)
+    elif use_original:
         dataset_config = DATASETS_CONFIG_ORIGINAL[args.dataset]
     elif use_iso_simple:
         dataset_config = DATASETS_CONFIG_ISO_SIMPLE[args.dataset]
     else:
         dataset_config = DATASETS_CONFIG_ISO[args.dataset]
-    
+
     # Determine output path (using first JSONL file for naming)
     data_dir = Path(args.datasets_root) / dataset_config["data_dir"]
     jsonl_files = sorted(data_dir.glob("*.jsonl"))
     if not jsonl_files:
         print(f"ERROR: No JSONL files in {data_dir}", file=sys.stderr)
         sys.exit(1)
-    
+
     source_file = jsonl_files[0].name
     output_path = get_output_path(
         args.out_dir, args.model, args.dataset,
         source_file, args.temperature, args.n_generations,
-        use_original=use_original, use_iso_simple=use_iso_simple
+        use_original=use_original, use_iso_simple=use_iso_simple,
+        fuzz_tag=fuzz_tag,
     )
-    
-    if use_original:
+
+    if fuzz_tag:
+        mode_str = f"FUZZ:{fuzz_tag}"
+    elif use_original:
         mode_str = "ORIGINAL"
     elif use_iso_simple:
         mode_str = "ISO_SIMPLE"
@@ -1092,7 +1389,7 @@ def main():
     print(f"Temperature: {args.temperature}")
     print(f"N generations: {args.n_generations}")
     print(f"Output: {output_path}")
-    
+
     # Load resume set
     resume_set = set()
     if args.resume:
@@ -1102,17 +1399,18 @@ def main():
             print(f"Resume: {len(resume_set)} successful completions (will retry errors)")
         else:
             print(f"Resume: {len(resume_set)} completions already done")
-    
+
     # Build tasks
     tasks = build_tasks(
         args.dataset, args.datasets_root, args.model,
         args.n_generations, args.max_problems,
         resume_set, args.only_iso_applied,
-        use_original=use_original, use_iso_simple=use_iso_simple
+        use_original=use_original, use_iso_simple=use_iso_simple,
+        fuzz_tag=fuzz_tag,
     )
-    
+
     print(f"Tasks to process: {len(tasks)}")
-    
+
     if args.dry_run:
         print("\n=== DRY RUN MODE ===")
         for task in tasks[:3]:
@@ -1120,17 +1418,19 @@ def main():
             print(f"Prompt (first 500 chars):\n{task['prompt_used'][:500]}...")
         print(f"\n... and {len(tasks) - 3} more tasks")
         return
-    
+
     if not tasks:
         print("No tasks to process. Exiting.")
         return
-    
+
     # Run appropriate pipeline
     if backend == "gemini":
         run_gemini_pipeline(args, config, model_config, tasks, output_path)
+    elif backend == "openrouter":
+        run_openrouter_pipeline(args, config, model_config, tasks, output_path)
     else:
         run_huggingface_pipeline(args, config, model_config, tasks, output_path)
-    
+
     print(f"Output: {output_path}")
 
 

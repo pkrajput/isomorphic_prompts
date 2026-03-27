@@ -12,10 +12,9 @@ datasets/
 dynamic_stability/
 ASE_generalization/
 ASE_generalization_final/
-*.png
-# PDFs except figs/ which we ship
-/*.pdf
-ASE_generalization*/**/*.pdf
+*.pdf
+# PNGs except figs/ which we ship
+/*.png
 citation_verification_report.txt
 fix_braces.py
 fix_highlight.py

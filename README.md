@@ -87,7 +87,7 @@ Length control: `--fuzz deadcode`.
 
 ---
 
-## Opcode Entropy KDE (Gemini-2.0-Flash)
+## Opcode Entropy KDE
 
 <p align="center">
   <img src="figs/kde_bigobench_gemini20.png" width="80%"/>

@@ -89,42 +89,29 @@ Length control: `--fuzz deadcode`.
 
 ## Opcode Entropy KDE (Gemini-2.0-Flash)
 
-Frontier models produce nearly identical opcode-entropy profiles under ISO and
-Original conditions, demonstrating preserved algorithmic competence despite
-substantial pass@1 drops.
+<p align="center">
+  <img src="figs/kde_bigobench_gemini20.png" width="80%"/>
+</p>
 
 <p align="center">
-  <img src="figs/kde_bigobench_gemini20.png" alt="Opcode entropy KDE — BigOBench" width="80%"/>
+  <img src="figs/kde_effibench_gemini20.png" width="80%"/>
 </p>
-<p align="center"><em>BigOBench: entropy distributions overlap almost perfectly under ISO.</em></p>
 
 <p align="center">
-  <img src="figs/kde_effibench_gemini20.png" alt="Opcode entropy KDE — EffiBench" width="80%"/>
+  <img src="figs/kde_mbpp_gemini20.png" width="80%"/>
 </p>
-<p align="center"><em>EffiBench: same pattern — algorithmic core preserved, decoder fumbles the contract.</em></p>
-
-<p align="center">
-  <img src="figs/kde_mbpp_gemini20.png" alt="Opcode entropy KDE — MBPP" width="80%"/>
-</p>
-<p align="center"><em>MBPP: even on a contamination-likely benchmark, ISO and Original opcode profiles align.</em></p>
 
 ---
 
 ## CoDeC Contamination Probing
 
-CoDeC measures how in-context examples shift token log-likelihoods to
-distinguish seen from unseen training data. The signal degrades as model
-scale grows.
+<p align="center">
+  <img src="figs/codec_scores.png" width="65%"/>
+</p>
 
 <p align="center">
-  <img src="figs/codec_scores.png" alt="CoDeC contamination scores across scale" width="65%"/>
+  <img src="figs/codec_auc.png" width="65%"/>
 </p>
-<p align="center"><em>Seen–unseen gap collapses from 58 pts (Pythia-12B) to 5.5 pts (Llama-3.1-405B).</em></p>
-
-<p align="center">
-  <img src="figs/codec_auc.png" alt="CoDeC AUC across scale" width="65%"/>
-</p>
-<p align="center"><em>AUC drops from 100% at the Pythia scale to 75% at frontier scale.</em></p>
 
 ---
 

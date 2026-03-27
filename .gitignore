@@ -12,10 +12,15 @@ datasets/
 dynamic_stability/
 ASE_generalization/
 ASE_generalization_final/
-*.pdf
 *.png
+# PDFs except figs/ which we ship
+/*.pdf
+ASE_generalization*/**/*.pdf
 citation_verification_report.txt
 fix_braces.py
 fix_highlight.py
 table_with_ci.tex
 prompt_stats/
+analyze_results/plots/
+analyze_results/data/
+generation_and_testing/gen_gemini.py

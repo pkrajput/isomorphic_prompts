@@ -4,6 +4,15 @@ Replication package for evaluating memorization and generalization in code LLMs
 using **I/O isomorphisms**, **encoder-side synonym fuzzing**, and **decoder-side
 contamination probing (CoDeC)**.
 
+<p align="center">
+  <img src="figs/methodology.pdf" alt="Methodology overview" width="95%"/>
+</p>
+
+> We evaluate three diagnostic axes across model scale: encoder-side synonym
+> fuzzing, decoder-side CoDeC contamination probing, and I/O isomorphisms with
+> opcode analysis. The isomorphism preserves the algorithmic task exactly while
+> isolating representational burden on both prompt processing and generation.
+
 ---
 
 ## Repository Structure
@@ -16,19 +25,6 @@ contamination probing (CoDeC)**.
 │   ├── contracts.py                # Encoding contract generation
 │   ├── iso_transforms.py           # Affine, cubic, base-conversion transforms
 │   └── prompt_fuzzing.py           # Synonym fuzzing and dead-code insertion
-├── datasets/                       # All benchmark variants (hosted on Zenodo)
-│   ├── BigOBench/
-│   │   ├── original/
-│   │   ├── iso_affine/
-│   │   ├── iso_affine_oracle/
-│   │   ├── iso_affine_encode_only/
-│   │   ├── iso_base_conv/
-│   │   ├── iso_cubic/
-│   │   ├── synonym_20/
-│   │   ├── synonym_40/
-│   │   └── deadcode/
-│   ├── Effibench/                  # Same sub-structure
-│   └── mbpp/                       # Same sub-structure
 ├── generation_and_testing/         # Code generation and evaluation
 │   ├── gen_models.py               # Multi-backend generation (Gemini, OpenRouter, HuggingFace)
 │   ├── run_unittests.py            # Execute test cases against generated code
@@ -39,10 +35,18 @@ contamination probing (CoDeC)**.
 │   ├── extract_opcodes.py          # Opcode distributions via dis, per-problem JSD
 │   ├── compare_conditions.py       # JSD between orig and ISO opcode centroids
 │   └── run_metrics.sh
-├── codec/                          # CoDeC contamination probing (Section 4.2)
+├── codec/                          # CoDeC contamination probing
+│   ├── experiment.py               # Core CoDeC experiment logic (token log-likelihoods)
+│   ├── run_codec_scale_confirmation.py  # Run CoDeC across model scale axis
+│   ├── compare_codec_results.py    # Aggregate results into comparison tables
+│   ├── plot_codec_comparison.py    # Generate CoDeC figures
+│   ├── utils.py                    # Gemini / tokenization / alignment helpers
+│   └── requirements.txt
 ├── analyze_results/                # Aggregate statistics and tables
 │   ├── bootstrap_ci.py             # 95% bootstrap CIs for pass@1 differences
 │   └── gen_table_with_ci.py        # LaTeX table generation
+├── datasets/                       # All benchmark variants (hosted on Zenodo)
+├── figs/                           # Key figures
 ├── config.yaml                     # API keys (not committed)
 └── requirements.txt
 ```
@@ -80,6 +84,47 @@ contamination probing (CoDeC)**.
 
 Ablation ISO families: `--iso_family affine_int` (default), `base_conv`, `cubic_int`.
 Length control: `--fuzz deadcode`.
+
+---
+
+## Opcode Entropy KDE (Gemini-2.0-Flash)
+
+Frontier models produce nearly identical opcode-entropy profiles under ISO and
+Original conditions, demonstrating preserved algorithmic competence despite
+substantial pass@1 drops.
+
+<p align="center">
+  <img src="figs/kde_bigobench_gemini20.pdf" alt="Opcode entropy KDE — BigOBench" width="80%"/>
+</p>
+<p align="center"><em>BigOBench: entropy distributions overlap almost perfectly under ISO.</em></p>
+
+<p align="center">
+  <img src="figs/kde_effibench_gemini20.pdf" alt="Opcode entropy KDE — EffiBench" width="80%"/>
+</p>
+<p align="center"><em>EffiBench: same pattern — algorithmic core preserved, decoder fumbles the contract.</em></p>
+
+<p align="center">
+  <img src="figs/kde_mbpp_gemini20.pdf" alt="Opcode entropy KDE — MBPP" width="80%"/>
+</p>
+<p align="center"><em>MBPP: even on a contamination-likely benchmark, ISO and Original opcode profiles align.</em></p>
+
+---
+
+## CoDeC Contamination Probing
+
+CoDeC measures how in-context examples shift token log-likelihoods to
+distinguish seen from unseen training data. The signal degrades as model
+scale grows.
+
+<p align="center">
+  <img src="figs/codec_scores.pdf" alt="CoDeC contamination scores across scale" width="65%"/>
+</p>
+<p align="center"><em>Seen–unseen gap collapses from 58 pts (Pythia-12B) to 5.5 pts (Llama-3.1-405B).</em></p>
+
+<p align="center">
+  <img src="figs/codec_auc.pdf" alt="CoDeC AUC across scale" width="65%"/>
+</p>
+<p align="center"><em>AUC drops from 100% at the Pythia scale to 75% at frontier scale.</em></p>
 
 ---
 
@@ -156,7 +201,7 @@ for MODEL in gemini-2.0-flash gemini-2.5-flash gpt-4o gpt-4o-mini \
 done
 ```
 
-### Step 3: ISO Family Ablation (Table 8)
+### Step 3: ISO Family Ablation
 
 ```bash
 for MODEL in gemini-2.0-flash codestral-22b qwen2.5-coder-32b; do
@@ -169,7 +214,7 @@ for MODEL in gemini-2.0-flash codestral-22b qwen2.5-coder-32b; do
 done
 ```
 
-### Step 4: Dead-Code Length Control (Table 9)
+### Step 4: Dead-Code Length Control
 
 ```bash
 for MODEL in gemini-2.0-flash codestral-22b llama-3.1-70b; do
@@ -187,7 +232,23 @@ done
   --model gemini-2.0-flash --datasets bigobench,effibench,mbpp
 ```
 
-### Step 6: Bootstrap CIs
+### Step 6: CoDeC Contamination Probing
+
+```bash
+cd codec
+pip install -r requirements.txt
+
+# Run across the full scale axis
+python run_codec_scale_confirmation.py --models all \
+  --seen-datasets hackernews,wikipedia \
+  --unseen-datasets gpqa_diamond,livecodebench_v5
+
+# Aggregate and plot
+python compare_codec_results.py --results-dir results
+python plot_codec_comparison.py --csv comparison.csv
+```
+
+### Step 7: Bootstrap CIs
 
 ```bash
 python analyze_results/bootstrap_ci.py

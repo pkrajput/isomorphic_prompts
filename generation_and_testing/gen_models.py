@@ -1,20 +1,14 @@
 #!/usr/bin/env python3
 """
-gen_models.py - Generate N completions per problem using Gemini or HuggingFace models.
+gen_models.py - Multi-backend code generation for the I/O Isomorphism pipeline.
 
-Part 2 of the I/O Isomorphism Pipeline.
-Consumes iso-transformed datasets from ./datasets/*_iso/ and produces
-streaming JSONL with generated solutions.
+Backends:
+  - Gemini API    (gemini-2.0-flash, gemini-2.5-flash)
+  - OpenRouter    (gpt-4o, gpt-4o-mini, and any OpenAI-compatible model)
+  - HuggingFace   (local vLLM / transformers GPU inference)
 
-Supported Models:
-- Gemini: gemini-2.0-flash, gemini-2.5-pro (via Google API)
-- HuggingFace: starcoder2-15b, codestral-22b (local GPU inference)
-
-Features:
-- Retry with exponential backoff for transient failures (Gemini)
-- Batched inference for HuggingFace models (single GPU)
-- Model-aware default workers and batch sizes
-- Detailed error classification for debugging
+Reads iso-transformed or original JSONL datasets and streams per-problem
+completions to results/<model>/<variant>/generations/*.jsonl.
 """
 
 import argparse
@@ -30,8 +24,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Optional
 
-# Patch for DeepSeek-Coder-V2 remote code that imports a function
-# removed in newer transformers (>= 4.42).
 try:
     import transformers.utils.import_utils as _tiu
     if not hasattr(_tiu, "is_torch_fx_available"):
@@ -59,137 +51,86 @@ Implement an efficient solution.
 
 """
 
-# Config for ISO-transformed datasets
-DATASETS_CONFIG_ISO = {
-    "bigobench": {
-        "data_dir": "bigobench_iso",
-        "prompt_field": "prompt_with_contract",
-        "fallback_prompt_fields": ["description", "prompt"],
-        "problem_id_field": "problem_id",
-        "starter_code_field": None,
-    },
-    "effibench": {
-        "data_dir": "effibench_iso",
-        "prompt_field": "prompt_with_contract",
-        "fallback_prompt_fields": ["prompt"],
-        "problem_id_field": "id",
-        "starter_code_field": "starter_code_python3",  # Must complete class method
-    },
-    "mbpp": {
-        "data_dir": "mbpp_iso",
-        "prompt_field": "prompt_with_contract",
-        "fallback_prompt_fields": ["prompt"],
-        "problem_id_field": "task_id",
-        "starter_code_field": None,
-    },
+# Canonical top-level directory per dataset
+_DS_TOP = {"bigobench": "BigOBench", "effibench": "Effibench", "mbpp": "mbpp"}
+
+# Map iso_family arg to short folder name
+_FAMILY_SHORT = {
+    "affine_int": "affine", "basek_int": "base_conv", "base_conv": "base_conv",
+    "cubic_int": "cubic", "identity": "identity",
 }
 
-# Config for ISO-simple (oracle-help) datasets
-DATASETS_CONFIG_ISO_SIMPLE = {
+# Per-dataset schema metadata (shared across all variants)
+_DS_SCHEMA = {
     "bigobench": {
-        "data_dir": "bigobench_iso_simple",
-        "prompt_field": "prompt_with_contract",
+        "prompt_field_iso": "prompt_with_contract",
+        "prompt_field_orig": "description",
         "fallback_prompt_fields": ["description", "prompt"],
         "problem_id_field": "problem_id",
         "starter_code_field": None,
     },
     "effibench": {
-        "data_dir": "effibench_iso_simple",
-        "prompt_field": "prompt_with_contract",
+        "prompt_field_iso": "prompt_with_contract",
+        "prompt_field_orig": "prompt",
         "fallback_prompt_fields": ["prompt"],
         "problem_id_field": "id",
         "starter_code_field": "starter_code_python3",
     },
     "mbpp": {
-        "data_dir": "mbpp_iso_simple",
-        "prompt_field": "prompt_with_contract",
+        "prompt_field_iso": "prompt_with_contract",
+        "prompt_field_orig": "prompt",
         "fallback_prompt_fields": ["prompt"],
         "problem_id_field": "task_id",
         "starter_code_field": None,
     },
 }
 
-# Config for ORIGINAL (non-perturbed) datasets
-DATASETS_CONFIG_ORIGINAL = {
-    "bigobench": {
-        "data_dir": "BigOBench",
-        "prompt_field": "description",
-        "fallback_prompt_fields": ["prompt"],
-        "problem_id_field": "problem_id",
-        "starter_code_field": None,
-    },
-    "effibench": {
-        "data_dir": "Effibench",
-        "prompt_field": "prompt",
-        "fallback_prompt_fields": [],
-        "problem_id_field": "id",
-        "starter_code_field": "starter_code_python3",  # Must complete class method
-    },
-    "mbpp": {
-        "data_dir": "mbpp",
-        "prompt_field": "prompt",
-        "fallback_prompt_fields": [],
-        "problem_id_field": "task_id",
-        "starter_code_field": None,
-    },
-}
+
+def _build_config(dataset: str, sub_dir: str, is_iso: bool) -> dict:
+    s = _DS_SCHEMA[dataset]
+    return {
+        "data_dir": os.path.join(_DS_TOP[dataset], sub_dir),
+        "prompt_field": s["prompt_field_iso"] if is_iso else s["prompt_field_orig"],
+        "fallback_prompt_fields": s["fallback_prompt_fields"],
+        "problem_id_field": s["problem_id_field"],
+        "starter_code_field": s["starter_code_field"],
+    }
+
+
+def get_iso_config(dataset: str, iso_family: str = "affine_int") -> dict:
+    family_short = _FAMILY_SHORT.get(iso_family, iso_family)
+    return _build_config(dataset, f"iso_{family_short}", is_iso=True)
+
+
+def get_iso_dec_only_config(dataset: str, iso_family: str = "affine_int") -> dict:
+    family_short = _FAMILY_SHORT.get(iso_family, iso_family)
+    return _build_config(dataset, f"iso_{family_short}_oracle", is_iso=True)
+
+
+def get_iso_enc_only_config(dataset: str, iso_family: str = "affine_int") -> dict:
+    family_short = _FAMILY_SHORT.get(iso_family, iso_family)
+    return _build_config(dataset, f"iso_{family_short}_encode_only", is_iso=True)
+
+
+def get_original_config(dataset: str) -> dict:
+    return _build_config(dataset, "original", is_iso=False)
+
 
 # Valid fuzz tags (created by change_prompts/prompt_fuzzing.py)
 VALID_FUZZ_TAGS = ["synonym_20", "synonym_40", "deadcode"]
 
 def get_fuzz_config(dataset: str, fuzz_tag: str) -> dict:
-    """Build a dataset config for a fuzzed variant.
+    return _build_config(dataset, fuzz_tag, is_iso=False)
 
-    Fuzzed datasets reuse the same schema as ORIGINAL but live in a
-    different directory (e.g. ``bigobench_synonym_20``).
-    """
-    base = dict(DATASETS_CONFIG_ORIGINAL[dataset])
-    base["data_dir"] = f"{dataset}_{fuzz_tag}"
-    return base
-
-# Model configurations
 MODEL_CONFIGS = {
-    # Gemini models (API-based)
+    # ── Gemini API ────────────────────────────────────────────────
     "gemini-2.0-flash": {
         "backend": "gemini",
         "model_id": "gemini-2.0-flash",
         "workers": 50,
         "timeout": 120,
-        "batch_size": 1,  # API-based, no batching
-    },
-    "gemini-2.5-pro": {
-        "backend": "gemini",
-        "model_id": "gemini-2.5-pro",
-        "workers": 8,   # Much lower for Pro to avoid rate limits
-        "timeout": 300, # Longer timeout for Pro
         "batch_size": 1,
     },
-    # HuggingFace models (local GPU inference)
-    "starcoder2-15b": {
-        "backend": "huggingface",
-        "model_id": "bigcode/starcoder2-15b",
-        "workers": 1,       # Sequential for GPU
-        "timeout": 300,
-        "batch_size": 4,    # Batch for efficiency
-        "max_new_tokens": 2048,
-        "use_chat_template": False,  # Completion model, no chat template
-        "trust_remote_code": True,
-        "torch_dtype": "bfloat16",
-        "device_map": "auto",
-    },
-    "codestral-22b": {
-        "backend": "huggingface",
-        "model_id": "mistralai/Codestral-22B-v0.1",
-        "workers": 1,
-        "timeout": 300,
-        "batch_size": 2,    # Smaller batch due to model size
-        "max_new_tokens": 2048,
-        "use_chat_template": True,  # Chat model with proper template
-        "trust_remote_code": True,
-        "torch_dtype": "bfloat16",
-        "device_map": "auto",
-    },
-    # Additional Gemini models
     "gemini-2.5-flash": {
         "backend": "gemini",
         "model_id": "gemini-2.5-flash",
@@ -197,7 +138,46 @@ MODEL_CONFIGS = {
         "timeout": 120,
         "batch_size": 1,
     },
-    # Additional HuggingFace models
+    # ── OpenRouter (GPT models) ───────────────────────────────────
+    "gpt-4o": {
+        "backend": "openrouter",
+        "model_id": "openai/gpt-4o-2024-08-06",
+        "workers": 30,
+        "timeout": 120,
+        "batch_size": 1,
+    },
+    "gpt-4o-mini": {
+        "backend": "openrouter",
+        "model_id": "openai/gpt-4o-mini-2024-07-18",
+        "workers": 30,
+        "timeout": 120,
+        "batch_size": 1,
+    },
+    # ── HuggingFace / vLLM (open-weight, local GPU) ───────────────
+    "deepseek-coder-6.7b": {
+        "backend": "huggingface",
+        "model_id": "deepseek-ai/deepseek-coder-6.7b-instruct",
+        "workers": 1,
+        "timeout": 300,
+        "batch_size": 4,
+        "max_new_tokens": 2048,
+        "use_chat_template": True,
+        "trust_remote_code": True,
+        "torch_dtype": "bfloat16",
+        "device_map": "auto",
+    },
+    "llama-3.1-8b": {
+        "backend": "huggingface",
+        "model_id": "meta-llama/Llama-3.1-8B-Instruct",
+        "workers": 1,
+        "timeout": 300,
+        "batch_size": 4,
+        "max_new_tokens": 2048,
+        "use_chat_template": True,
+        "trust_remote_code": True,
+        "torch_dtype": "bfloat16",
+        "device_map": "auto",
+    },
     "codellama-13b": {
         "backend": "huggingface",
         "model_id": "codellama/CodeLlama-13b-Instruct-hf",
@@ -210,9 +190,21 @@ MODEL_CONFIGS = {
         "torch_dtype": "bfloat16",
         "device_map": "auto",
     },
-    "deepseek-coder-v2-lite-instruct": {
+    "starcoder2-15b": {
         "backend": "huggingface",
-        "model_id": "deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct",
+        "model_id": "bigcode/starcoder2-15b",
+        "workers": 1,
+        "timeout": 300,
+        "batch_size": 4,
+        "max_new_tokens": 2048,
+        "use_chat_template": False,
+        "trust_remote_code": True,
+        "torch_dtype": "bfloat16",
+        "device_map": "auto",
+    },
+    "codestral-22b": {
+        "backend": "huggingface",
+        "model_id": "mistralai/Codestral-22B-v0.1",
         "workers": 1,
         "timeout": 300,
         "batch_size": 2,
@@ -222,27 +214,29 @@ MODEL_CONFIGS = {
         "torch_dtype": "bfloat16",
         "device_map": "auto",
     },
-    # OpenRouter models (API-based, OpenAI-compatible)
-    "qwen3-coder": {
-        "backend": "openrouter",
-        "model_id": "qwen/qwen3-coder",
-        "workers": 30,
-        "timeout": 120,
+    "qwen2.5-coder-32b": {
+        "backend": "huggingface",
+        "model_id": "Qwen/Qwen2.5-Coder-32B-Instruct",
+        "workers": 1,
+        "timeout": 300,
         "batch_size": 1,
+        "max_new_tokens": 2048,
+        "use_chat_template": True,
+        "trust_remote_code": True,
+        "torch_dtype": "bfloat16",
+        "device_map": "auto",
     },
-    "gpt-4o-mini": {
-        "backend": "openrouter",
-        "model_id": "openai/gpt-4o-mini",
-        "workers": 30,
-        "timeout": 120,
+    "llama-3.1-70b": {
+        "backend": "huggingface",
+        "model_id": "meta-llama/Llama-3.1-70B-Instruct",
+        "workers": 1,
+        "timeout": 600,
         "batch_size": 1,
-    },
-    "gpt-5.1-codex-mini": {
-        "backend": "openrouter",
-        "model_id": "openai/gpt-5.1-codex-mini",
-        "workers": 20,
-        "timeout": 180,
-        "batch_size": 1,
+        "max_new_tokens": 2048,
+        "use_chat_template": True,
+        "trust_remote_code": True,
+        "torch_dtype": "bfloat16",
+        "device_map": "auto",
     },
 }
 
@@ -936,22 +930,26 @@ def build_tasks(
     resume_set: set,
     only_iso_applied: bool,
     use_original: bool = False,
-    use_iso_simple: bool = False,
+    use_iso_dec_only: bool = False,
+    use_iso_enc_only: bool = False,
     fuzz_tag: Optional[str] = None,
+    iso_family: str = "affine_int",
 ) -> list[dict]:
     """Build list of generation tasks from dataset files."""
-    # Select config based on mode
     if fuzz_tag:
         config = get_fuzz_config(dataset, fuzz_tag)
         prompt_wrapper = PROMPT_WRAPPER_ORIGINAL
     elif use_original:
-        config = DATASETS_CONFIG_ORIGINAL[dataset]
+        config = get_original_config(dataset)
         prompt_wrapper = PROMPT_WRAPPER_ORIGINAL
-    elif use_iso_simple:
-        config = DATASETS_CONFIG_ISO_SIMPLE[dataset]
+    elif use_iso_dec_only:
+        config = get_iso_dec_only_config(dataset, iso_family)
+        prompt_wrapper = PROMPT_WRAPPER_ISO
+    elif use_iso_enc_only:
+        config = get_iso_enc_only_config(dataset, iso_family)
         prompt_wrapper = PROMPT_WRAPPER_ISO
     else:
-        config = DATASETS_CONFIG_ISO[dataset]
+        config = get_iso_config(dataset, iso_family)
         prompt_wrapper = PROMPT_WRAPPER_ISO
     
     data_dir = Path(datasets_root) / config["data_dir"]
@@ -1020,6 +1018,14 @@ def build_tasks(
                         continue  # Skip already completed
                     
                     is_plain = use_original or fuzz_tag
+                    if use_iso_dec_only:
+                        variant = "iso_dec_only"
+                    elif use_iso_enc_only:
+                        variant = "iso_enc_only"
+                    elif not is_plain:
+                        variant = "iso"
+                    else:
+                        variant = None
                     task = {
                         "dataset": dataset,
                         "model": model_name,
@@ -1032,8 +1038,7 @@ def build_tasks(
                         "is_original": use_original and not fuzz_tag,
                         "fuzz_tag": fuzz_tag,
                         "iso_applied": iso_applied if not is_plain else None,
-                        "iso_variant": ("iso_simple" if use_iso_simple
-                                        else ("iso" if not is_plain else None)),
+                        "iso_variant": variant,
                         "iso_family": row.get("iso_family") if not is_plain else None,
                         "iso_seed": row.get("iso_seed") if not is_plain else None,
                         "iso_params": row.get("iso_params") if not is_plain else None,
@@ -1057,22 +1062,27 @@ def get_output_path(
     temperature: float,
     n_generations: int,
     use_original: bool = False,
-    use_iso_simple: bool = False,
+    use_iso_dec_only: bool = False,
+    use_iso_enc_only: bool = False,
     fuzz_tag: Optional[str] = None,
+    iso_family: str = "affine_int",
 ) -> str:
     """Build output path following the required naming convention."""
+    family_short = _FAMILY_SHORT.get(iso_family, iso_family)
     if fuzz_tag:
         dataset_subdir = f"{dataset}_{fuzz_tag}"
     elif use_original:
-        dataset_subdir = DATASETS_CONFIG_ORIGINAL[dataset]["data_dir"].lower()
-    elif use_iso_simple:
-        dataset_subdir = DATASETS_CONFIG_ISO_SIMPLE[dataset]["data_dir"]
+        dataset_subdir = dataset
+    elif use_iso_dec_only:
+        dataset_subdir = f"{dataset}_iso_{family_short}_oracle"
+    elif use_iso_enc_only:
+        dataset_subdir = f"{dataset}_iso_{family_short}_encode_only"
     else:
-        dataset_subdir = DATASETS_CONFIG_ISO[dataset]["data_dir"]
-    
+        dataset_subdir = f"{dataset}_iso_{family_short}"
+
     basename = source_file.replace(".jsonl", "").replace(".iso", "")
     filename = f"{basename}__temp{temperature}__n{n_generations}.jsonl"
-    
+
     path = Path(out_dir) / model / dataset_subdir / "generations" / filename
     path.parent.mkdir(parents=True, exist_ok=True)
     return str(path)
@@ -1329,9 +1339,14 @@ def main():
     parser.add_argument("--dry_run", action="store_true")
     parser.add_argument("--only_iso_applied", action="store_true")
     parser.add_argument("--original", action="store_true",
-                        help="Use original (non-perturbed) datasets instead of ISO-transformed")
-    parser.add_argument("--iso_simple", action="store_true",
-                        help="Use ISO-simple (oracle-help) datasets")
+                        help="Use original (non-perturbed) datasets")
+    parser.add_argument("--iso_dec_only", action="store_true",
+                        help="ISO (dec only): original inputs, encoded outputs + oracle decoded inputs")
+    parser.add_argument("--iso_enc_only", action="store_true",
+                        help="ISO (enc only): encoded inputs, original outputs")
+    parser.add_argument("--iso_family", type=str, default="affine_int",
+                        choices=["affine_int", "base_conv", "cubic_int"],
+                        help="Isomorphism family (default: affine_int)")
     parser.add_argument("--fuzz", type=str, default=None,
                         choices=VALID_FUZZ_TAGS,
                         help="Use a fuzzed dataset variant (e.g. synonym_20, synonym_40, deadcode)")
@@ -1349,26 +1364,29 @@ def main():
 
     config = load_config(args.config)
 
-    # Mutual exclusivity
-    mode_flags = sum([args.original, args.iso_simple, args.fuzz is not None])
+    mode_flags = sum([args.original, args.iso_dec_only, args.iso_enc_only,
+                       args.fuzz is not None])
     if mode_flags > 1:
-        print("ERROR: --original, --iso_simple, and --fuzz are mutually exclusive",
-              file=sys.stderr)
+        print("ERROR: --original, --iso_dec_only, --iso_enc_only, and --fuzz "
+              "are mutually exclusive", file=sys.stderr)
         sys.exit(1)
 
     use_original = args.original
-    use_iso_simple = args.iso_simple
+    use_iso_dec_only = args.iso_dec_only
+    use_iso_enc_only = args.iso_enc_only
     fuzz_tag = args.fuzz
+    iso_family = args.iso_family
 
-    # Select dataset config based on flags
     if fuzz_tag:
         dataset_config = get_fuzz_config(args.dataset, fuzz_tag)
     elif use_original:
-        dataset_config = DATASETS_CONFIG_ORIGINAL[args.dataset]
-    elif use_iso_simple:
-        dataset_config = DATASETS_CONFIG_ISO_SIMPLE[args.dataset]
+        dataset_config = get_original_config(args.dataset)
+    elif use_iso_dec_only:
+        dataset_config = get_iso_dec_only_config(args.dataset, iso_family)
+    elif use_iso_enc_only:
+        dataset_config = get_iso_enc_only_config(args.dataset, iso_family)
     else:
-        dataset_config = DATASETS_CONFIG_ISO[args.dataset]
+        dataset_config = get_iso_config(args.dataset, iso_family)
 
     # Determine output path (using first JSONL file for naming)
     data_dir = Path(args.datasets_root) / dataset_config["data_dir"]
@@ -1381,18 +1399,22 @@ def main():
     output_path = get_output_path(
         args.out_dir, args.model, args.dataset,
         source_file, args.temperature, args.n_generations,
-        use_original=use_original, use_iso_simple=use_iso_simple,
-        fuzz_tag=fuzz_tag,
+        use_original=use_original,
+        use_iso_dec_only=use_iso_dec_only,
+        use_iso_enc_only=use_iso_enc_only,
+        fuzz_tag=fuzz_tag, iso_family=iso_family,
     )
 
     if fuzz_tag:
         mode_str = f"FUZZ:{fuzz_tag}"
     elif use_original:
         mode_str = "ORIGINAL"
-    elif use_iso_simple:
-        mode_str = "ISO_SIMPLE"
+    elif use_iso_dec_only:
+        mode_str = f"ISO_DEC_ONLY ({iso_family})"
+    elif use_iso_enc_only:
+        mode_str = f"ISO_ENC_ONLY ({iso_family})"
     else:
-        mode_str = "ISO"
+        mode_str = f"ISO ({iso_family})"
     print(f"Dataset: {args.dataset} ({mode_str})")
     print(f"Model: {args.model} (backend: {backend})")
     print(f"Temperature: {args.temperature}")
@@ -1409,13 +1431,14 @@ def main():
         else:
             print(f"Resume: {len(resume_set)} completions already done")
 
-    # Build tasks
     tasks = build_tasks(
         args.dataset, args.datasets_root, args.model,
         args.n_generations, args.max_problems,
         resume_set, args.only_iso_applied,
-        use_original=use_original, use_iso_simple=use_iso_simple,
-        fuzz_tag=fuzz_tag,
+        use_original=use_original,
+        use_iso_dec_only=use_iso_dec_only,
+        use_iso_enc_only=use_iso_enc_only,
+        fuzz_tag=fuzz_tag, iso_family=iso_family,
     )
 
     print(f"Tasks to process: {len(tasks)}")

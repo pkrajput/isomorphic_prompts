@@ -2,12 +2,8 @@
 #
 # pipeline_generate_and_test.sh
 #
-# Convenience wrapper to run generation and unittests for code models.
-# Part 2 of the I/O Isomorphism Pipeline.
-#
-# Supports:
-#   - Gemini models (API-based): gemini-2.0-flash, gemini-2.5-pro
-#   - HuggingFace models (local GPU): starcoder2-15b, codestral-22b
+# Wrapper: generation + unittests for all configured models.
+# Supports Gemini API, OpenRouter, and HuggingFace backends.
 #
 
 set -e
@@ -25,7 +21,10 @@ RESUME_FLAG=""
 DATASETS_ROOT="./datasets"
 OUT_DIR="./results"
 ORIGINAL_FLAG=""
-ISO_SIMPLE_FLAG=""
+ISO_DEC_ONLY_FLAG=""
+ISO_ENC_ONLY_FLAG=""
+FUZZ_TAG=""
+ISO_FAMILY="affine_int"
 
 # Detect Python
 if command -v python3.10 &> /dev/null; then
@@ -44,9 +43,7 @@ Run generation and unittests for code models on original or ISO datasets.
 
 Required:
   --dataset         Dataset to process (bigobench, effibench, or mbpp)
-  --model           Model to use for generation:
-                    - Gemini (API): gemini-2.0-flash, gemini-2.5-pro
-                    - HuggingFace (GPU): starcoder2-15b, codestral-22b
+  --model           Model key from gen_models.py MODEL_CONFIGS
 
 Options:
   --temperature     LLM temperature (default: 0.0)
@@ -57,20 +54,26 @@ Options:
   --config          Config YAML path (default: config.yaml)
   --resume          Resume from existing output
   --original        Use original datasets (default: ISO)
-  --iso_simple      Use ISO-simple (oracle-help) datasets
+  --iso_dec_only    ISO (dec only): oracle inputs, encoded outputs
+  --iso_enc_only    ISO (enc only): encoded inputs, original outputs
+  --fuzz TAG        Fuzzed variant: synonym_20, synonym_40, deadcode
+  --iso_family      Isomorphism family: affine_int, base_conv, cubic_int (default: affine_int)
   --datasets_root   Datasets directory (default: ./datasets)
   --out_dir         Output directory (default: ./results)
   -h, --help        Show this help
 
 Examples:
-  # Generate with Gemini on BigOBench ISO
+  # Generate with Gemini on BigOBench ISO (affine, default)
   $0 --dataset bigobench --model gemini-2.0-flash --resume
+
+  # Generate with Gemini on BigOBench ISO (base conversion)
+  $0 --dataset bigobench --model gemini-2.0-flash --iso_family base_conv --resume
+
+  # Generate with Gemini on BigOBench ISO (cubic)
+  $0 --dataset bigobench --model gemini-2.0-flash --iso_family cubic_int --resume
 
   # Generate with StarCoder on MBPP original
   $0 --dataset mbpp --model starcoder2-15b --original --batch_size 4
-
-  # Generate with Gemini on EffiBench ISO-simple
-  $0 --dataset effibench --model gemini-2.0-flash --iso_simple --resume
 
   # Generate with Codestral on EffiBench ISO
   $0 --dataset effibench --model codestral-22b --n_generations 5
@@ -120,9 +123,21 @@ while [[ $# -gt 0 ]]; do
             ORIGINAL_FLAG="--original"
             shift
             ;;
-        --iso_simple)
-            ISO_SIMPLE_FLAG="--iso_simple"
+        --iso_dec_only)
+            ISO_DEC_ONLY_FLAG="--iso_dec_only"
             shift
+            ;;
+        --iso_enc_only)
+            ISO_ENC_ONLY_FLAG="--iso_enc_only"
+            shift
+            ;;
+        --fuzz)
+            FUZZ_TAG="$2"
+            shift 2
+            ;;
+        --iso_family)
+            ISO_FAMILY="$2"
+            shift 2
             ;;
         --datasets_root)
             DATASETS_ROOT="$2"
@@ -162,8 +177,13 @@ if [[ "$DATASET" != "bigobench" && "$DATASET" != "effibench" && "$DATASET" != "m
     exit 1
 fi
 
-if [[ -n "$ORIGINAL_FLAG" && -n "$ISO_SIMPLE_FLAG" ]]; then
-    echo "ERROR: --original and --iso_simple are mutually exclusive"
+MODE_COUNT=0
+[[ -n "$ORIGINAL_FLAG" ]] && ((MODE_COUNT++))
+[[ -n "$ISO_DEC_ONLY_FLAG" ]] && ((MODE_COUNT++))
+[[ -n "$ISO_ENC_ONLY_FLAG" ]] && ((MODE_COUNT++))
+[[ -n "$FUZZ_TAG" ]] && ((MODE_COUNT++))
+if [[ "$MODE_COUNT" -gt 1 ]]; then
+    echo "ERROR: --original, --iso_dec_only, --iso_enc_only, and --fuzz are mutually exclusive"
     exit 1
 fi
 
@@ -173,7 +193,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Build generation args
 GEN_ARGS="--dataset $DATASET --model $MODEL --datasets_root $DATASETS_ROOT --out_dir $OUT_DIR"
 GEN_ARGS="$GEN_ARGS --temperature $TEMPERATURE --n_generations $N_GENERATIONS"
-GEN_ARGS="$GEN_ARGS --workers $WORKERS --config $CONFIG"
+GEN_ARGS="$GEN_ARGS --workers $WORKERS --config $CONFIG --iso_family $ISO_FAMILY"
 
 if [[ -n "$BATCH_SIZE" ]]; then
     GEN_ARGS="$GEN_ARGS --batch_size $BATCH_SIZE"
@@ -191,22 +211,44 @@ if [[ -n "$ORIGINAL_FLAG" ]]; then
     GEN_ARGS="$GEN_ARGS $ORIGINAL_FLAG"
 fi
 
-if [[ -n "$ISO_SIMPLE_FLAG" ]]; then
-    GEN_ARGS="$GEN_ARGS $ISO_SIMPLE_FLAG"
+if [[ -n "$ISO_DEC_ONLY_FLAG" ]]; then
+    GEN_ARGS="$GEN_ARGS $ISO_DEC_ONLY_FLAG"
 fi
 
-# Determine dataset subdirectory
+if [[ -n "$ISO_ENC_ONLY_FLAG" ]]; then
+    GEN_ARGS="$GEN_ARGS $ISO_ENC_ONLY_FLAG"
+fi
+
+if [[ -n "$FUZZ_TAG" ]]; then
+    GEN_ARGS="$GEN_ARGS --fuzz $FUZZ_TAG"
+fi
+
+# Map dataset to its canonical directory name
+case "$DATASET" in
+    bigobench) DS_DIR="BigOBench" ;;
+    effibench) DS_DIR="Effibench" ;;
+    mbpp) DS_DIR="mbpp" ;;
+esac
+
+# Map iso_family to short folder name
+case "$ISO_FAMILY" in
+    affine_int) FAMILY_SHORT="affine" ;;
+    base_conv|basek_int) FAMILY_SHORT="base_conv" ;;
+    cubic_int) FAMILY_SHORT="cubic" ;;
+    *) FAMILY_SHORT="$ISO_FAMILY" ;;
+esac
+
+# Determine dataset subdirectory (for results output)
 if [[ -n "$ORIGINAL_FLAG" ]]; then
-    # Original datasets use different naming
-    case "$DATASET" in
-        bigobench) ISO_DIR="bigobench" ;;
-        effibench) ISO_DIR="effibench" ;;
-        mbpp) ISO_DIR="mbpp" ;;
-    esac
-elif [[ -n "$ISO_SIMPLE_FLAG" ]]; then
-    ISO_DIR="${DATASET}_iso_simple"
+    ISO_DIR="${DATASET}"
+elif [[ -n "$ISO_DEC_ONLY_FLAG" ]]; then
+    ISO_DIR="${DATASET}_iso_${FAMILY_SHORT}_oracle"
+elif [[ -n "$ISO_ENC_ONLY_FLAG" ]]; then
+    ISO_DIR="${DATASET}_iso_${FAMILY_SHORT}_encode_only"
+elif [[ -n "$FUZZ_TAG" ]]; then
+    ISO_DIR="${DATASET}_${FUZZ_TAG}"
 else
-    ISO_DIR="${DATASET}_iso"
+    ISO_DIR="${DATASET}_iso_${FAMILY_SHORT}"
 fi
 
 echo "=========================================="
@@ -216,8 +258,12 @@ echo "Dataset: $DATASET"
 echo "Model: $MODEL"
 if [[ -n "$ORIGINAL_FLAG" ]]; then
     MODE_STR="ORIGINAL"
-elif [[ -n "$ISO_SIMPLE_FLAG" ]]; then
-    MODE_STR="ISO_SIMPLE"
+elif [[ -n "$ISO_DEC_ONLY_FLAG" ]]; then
+    MODE_STR="ISO (dec only)"
+elif [[ -n "$ISO_ENC_ONLY_FLAG" ]]; then
+    MODE_STR="ISO (enc only)"
+elif [[ -n "$FUZZ_TAG" ]]; then
+    MODE_STR="FUZZ: $FUZZ_TAG"
 else
     MODE_STR="ISO"
 fi

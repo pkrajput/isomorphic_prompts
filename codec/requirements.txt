@@ -1,0 +1,9 @@
+google-genai
+matplotlib
+seaborn
+datasets
+pandas
+transformers
+torch
+accelerate
+scikit-learn

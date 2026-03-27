@@ -1,490 +1,204 @@
-# Invertible I/O-Isomorphism Pipeline
+# Scaled Code LLMs Generalize through Narrow Channels
 
-This directory contains scripts and utilities for applying **semantics-preserving, invertible I/O transformations** (isomorphisms) to code benchmark datasets.
-
-## Purpose
-
-Modern code models may exhibit **representation sensitivity**—producing correct solutions that behave differently (execution traces, resource usage) when given semantically equivalent but representationally different inputs. This pipeline:
-
-1. **Transforms test I/O** using invertible bijections (e.g., affine integer encoding)
-2. **Appends encoding contracts** to prompts describing the transformation
-3. **Verifies invertibility** via roundtrip checks on every row
-4. **Preserves semantics** so correctness is unchanged under the transformation
-
-## Key Insight
-
-> Accuracy can hide brittleness: same correctness, different execution strategy and resource envelope.
-
-By measuring execution phenotype drift (DCTD/DMPD) across isomorphic representations, we can detect hidden representation sensitivity that standard pass@k metrics miss.
+Replication package for evaluating memorization and generalization in code LLMs
+using **I/O isomorphisms**, **encoder-side synonym fuzzing**, and **decoder-side
+contamination probing (CoDeC)**.
 
 ---
 
-## Directory Structure
+## Repository Structure
 
 ```
 .
-├── change_prompts/               # Part 1: I/O isomorphism transforms
-│   ├── adapters/                 # Dataset-specific adapters
-│   ├── apply_isomorphisms.py     # Main driver script
-│   ├── contracts.py              # Contract generation utilities
-│   └── iso_transforms.py         # Library of invertible transforms
-├── datasets/                     # Input/output datasets
-│   ├── BigOBench/                # Original BigOBench
-│   ├── Effibench/                # Original EffiBench
-│   ├── mbpp/                     # Original MBPP
-│   ├── bigobench_iso/            # ISO-transformed BigOBench
-│   ├── bigobench_iso_simple/     # ISO-simple (oracle-help) BigOBench
-│   ├── effibench_iso/            # ISO-transformed EffiBench
-│   ├── effibench_iso_simple/     # ISO-simple (oracle-help) EffiBench
-│   ├── mbpp_iso/                 # ISO-transformed MBPP
-│   └── mbpp_iso_simple/          # ISO-simple (oracle-help) MBPP
-├── generation_and_testing/       # Part 2: Generation + Unittests
-│   ├── gen_models.py             # Multi-backend generation script
-│   ├── run_unittests.py          # Dataset-specific unittests
-│   ├── compute_pass_at_k.py      # Pass@k computation
-│   └── pipeline_generate_and_test.sh  # Generation pipeline
-├── dynamic_stability/            # Part 3: Stability metrics
-│   ├── calculate_sctd.py         # Static Code Trace Divergence
-│   ├── calculate_dctd.py         # Dynamic Code Trace Divergence
-│   ├── merge_shift.py            # Energy shift computation
-│   ├── metric_ready.py           # Prepare metric-ready data
-│   └── run_metrics.sh            # Metrics pipeline script
-├── metrics/                      # Metrics output directory
-│   ├── ready/                    # Metric-ready JSONL files
-│   ├── sctd/                     # SCTD results
-│   ├── dctd/                     # DCTD results
-│   └── plots/                    # Visualization plots
-├── results/                      # Generation/unittest results
-│   └── <model>/<dataset>/        # Model-specific outputs
-├── unittests/                    # Dataset-specific unittest harnesses
-└── config.yaml                   # API keys configuration
+├── change_prompts/                 # Dataset transformation pipeline
+│   ├── adapters/                   # BigOBench, EffiBench, MBPP adapters
+│   ├── apply_isomorphisms.py       # Apply I/O isomorphisms to datasets
+│   ├── contracts.py                # Encoding contract generation
+│   ├── iso_transforms.py           # Affine, cubic, base-conversion transforms
+│   └── prompt_fuzzing.py           # Synonym fuzzing and dead-code insertion
+├── datasets/                       # All benchmark variants (hosted on Zenodo)
+│   ├── BigOBench/
+│   │   ├── original/
+│   │   ├── iso_affine/
+│   │   ├── iso_affine_oracle/
+│   │   ├── iso_affine_encode_only/
+│   │   ├── iso_base_conv/
+│   │   ├── iso_cubic/
+│   │   ├── synonym_20/
+│   │   ├── synonym_40/
+│   │   └── deadcode/
+│   ├── Effibench/                  # Same sub-structure
+│   └── mbpp/                       # Same sub-structure
+├── generation_and_testing/         # Code generation and evaluation
+│   ├── gen_models.py               # Multi-backend generation (Gemini, OpenRouter, HuggingFace)
+│   ├── run_unittests.py            # Execute test cases against generated code
+│   ├── compute_pass_at_k.py        # Unbiased pass@k estimator
+│   └── pipeline_generate_and_test.sh
+├── opcode_analysis/                # Static opcode entropy and JSD divergence
+│   ├── metric_ready.py             # Prepare generation+test data for analysis
+│   ├── extract_opcodes.py          # Opcode distributions via dis, per-problem JSD
+│   ├── compare_conditions.py       # JSD between orig and ISO opcode centroids
+│   └── run_metrics.sh
+├── codec/                          # CoDeC contamination probing (Section 4.2)
+├── analyze_results/                # Aggregate statistics and tables
+│   ├── bootstrap_ci.py             # 95% bootstrap CIs for pass@1 differences
+│   └── gen_table_with_ci.py        # LaTeX table generation
+├── config.yaml                     # API keys (not committed)
+└── requirements.txt
 ```
 
 ---
 
-## Supported Models
+## Models
 
-### API-Based Models (Gemini)
-| Model | Backend | Default Workers | Notes |
-|-------|---------|-----------------|-------|
-| `gemini-2.0-flash` | Gemini API | 50 | Fast, high-throughput |
-| `gemini-2.5-pro` | Gemini API | 8 | Lower rate limits |
-
-### Local GPU Models (HuggingFace)
-| Model | Backend | HF Model ID | Batch Size | Notes |
-|-------|---------|-------------|------------|-------|
-| `starcoder2-15b` | HuggingFace | `bigcode/starcoder2-15b` | 4 | Completion model (no chat template) |
-| `codestral-22b` | HuggingFace | `mistralai/Codestral-22B-v0.1` | 2 | Chat model with template |
+| Model                         | Params | Backend     | CLI key              |
+|-------------------------------|--------|-------------|----------------------|
+| deepseek-coder-6.7b-instruct | 6.7B   | HuggingFace | `deepseek-coder-6.7b`|
+| Llama-3.1-8B-Instruct        | 8B     | HuggingFace | `llama-3.1-8b`       |
+| CodeLlama-13B-Instruct       | 13B    | HuggingFace | `codellama-13b`      |
+| StarCoder2-15B               | 15B    | HuggingFace | `starcoder2-15b`     |
+| Codestral-22B-v0.1           | 22B    | HuggingFace | `codestral-22b`      |
+| Qwen2.5-Coder-32B-Instruct   | 32B    | HuggingFace | `qwen2.5-coder-32b`  |
+| Llama-3.1-70B-Instruct       | 70B    | HuggingFace | `llama-3.1-70b`      |
+| gpt-4o-mini-2024-07-18       | ---    | OpenRouter  | `gpt-4o-mini`        |
+| gpt-4o-2024-08-06            | ---    | OpenRouter  | `gpt-4o`             |
+| gemini-2.0-flash             | ---    | Gemini API  | `gemini-2.0-flash`   |
+| gemini-2.5-flash             | ---    | Gemini API  | `gemini-2.5-flash`   |
 
 ---
 
-## Quick Start: Full Pipeline
+## Evaluation Conditions
 
-### Prerequisites
+| Condition          | Description                                           | CLI flag / folder suffix     |
+|--------------------|-------------------------------------------------------|------------------------------|
+| **Original**       | Unmodified benchmark                                  | `--original`                 |
+| **ISO**            | Full I/O isomorphism (encode inputs + decode outputs) | (default)                    |
+| **ISO (enc only)** | Only outputs encoded; inputs unchanged                | `--iso_enc_only`             |
+| **ISO (dec only)** | Oracle-decoded inputs provided; outputs encoded       | `--iso_dec_only`             |
+| **Syn-20%**        | 20% WordNet synonym substitution                      | `--fuzz synonym_20`          |
+| **Syn-40%**        | 40% WordNet synonym substitution                      | `--fuzz synonym_40`          |
+
+Ablation ISO families: `--iso_family affine_int` (default), `base_conv`, `cubic_int`.
+Length control: `--fuzz deadcode`.
+
+---
+
+## Setup
 
 ```bash
-# Install all dependencies
 pip install -r requirements.txt
-
-# Or install individually:
-# Core: pip install pyyaml tqdm
-# Gemini: pip install google-generativeai
-# HuggingFace (local GPU): pip install transformers torch accelerate
 ```
 
-### Configuration
-
-Create `config.yaml` in the project root:
+Create `config.yaml`:
 
 ```yaml
-# Gemini API key (required for Gemini models)
 api_key: "your-gemini-api-key"
-
-# HuggingFace token (optional, for gated models like Codestral)
-hf_token: "your-hf-token"
+openrouter_api_key: "your-openrouter-api-key"
+hf_token: "your-huggingface-token"    # optional, for gated models
 ```
+
+Download the datasets from Zenodo and place them under `datasets/`.
 
 ---
 
-## Running the Pipeline
+## Reproducing the Experiments
 
-### Part 1: Apply I/O Isomorphisms (Already Done)
+### Step 1: Generate Isomorphic Datasets
 
-Isomorphic datasets are pre-generated in `./datasets/*_iso/`.
-Oracle-help ablations are pre-generated in `./datasets/*_iso_simple/`.
-
-```bash
-# To regenerate (optional):
-python change_prompts/apply_isomorphisms.py \
-  --dataset bigobench \
-  --datasets_root ./datasets \
-  --out_root ./datasets/bigobench_iso \
-  --iso_family affine_int \
-  --seed 42
-
-# ISO-simple (oracle-help inputs)
-python change_prompts/apply_isomorphisms.py \
-  --dataset bigobench \
-  --datasets_root ./datasets \
-  --out_root ./datasets/bigobench_iso_simple \
-  --iso_family affine_int \
-  --seed 42 \
-  --oracle_help_inputs
-```
-
-### Part 2: Generation + Unittests
-
-#### Single Dataset, Single Model
+Transformed datasets are provided on Zenodo. To regenerate from scratch:
 
 ```bash
-# BigOBench with Gemini 2.0 Flash (ISO)
-./generation_and_testing/pipeline_generate_and_test.sh \
-  --dataset bigobench \
-  --model gemini-2.0-flash \
-  --n_generations 5 \
-  --resume
-
-# BigOBench with Gemini 2.0 Flash (ISO-simple / oracle-help)
-./generation_and_testing/pipeline_generate_and_test.sh \
-  --dataset bigobench \
-  --model gemini-2.0-flash \
-  --iso_simple \
-  --n_generations 5 \
-  --resume
-
-# BigOBench with Gemini 2.0 Flash (Original)
-./generation_and_testing/pipeline_generate_and_test.sh \
-  --dataset bigobench \
-  --model gemini-2.0-flash \
-  --original \
-  --n_generations 5 \
-  --resume
-```
-
-#### HuggingFace Models (Local GPU)
-
-```bash
-# StarCoder2 15B on MBPP ISO
-./generation_and_testing/pipeline_generate_and_test.sh \
-  --dataset mbpp \
-  --model starcoder2-15b \
-  --batch_size 4 \
-  --n_generations 5 \
-  --resume
-
-# Codestral 22B on EffiBench Original
-./generation_and_testing/pipeline_generate_and_test.sh \
-  --dataset effibench \
-  --model codestral-22b \
-  --original \
-  --batch_size 2 \
-  --n_generations 5 \
-  --resume
-```
-
-#### Run All Three Datasets (Original + ISO)
-
-```bash
-# === Gemini 2.0 Flash ===
 for DATASET in bigobench effibench mbpp; do
-  # ISO
-  ./generation_and_testing/pipeline_generate_and_test.sh \
-    --dataset $DATASET \
-    --model gemini-2.0-flash \
-    --n_generations 5 \
-    --resume
-  
-  # Original
-  ./generation_and_testing/pipeline_generate_and_test.sh \
-    --dataset $DATASET \
-    --model gemini-2.0-flash \
-    --original \
-    --n_generations 5 \
-    --resume
-done
+  # Affine isomorphism (all variants)
+  python change_prompts/apply_isomorphisms.py \
+    --dataset $DATASET --iso_family affine_int --seed 42
+  python change_prompts/apply_isomorphisms.py \
+    --dataset $DATASET --iso_family affine_int --seed 42 --oracle_help_inputs
+  python change_prompts/apply_isomorphisms.py \
+    --dataset $DATASET --iso_family affine_int --seed 42 --encode_only
 
-# === StarCoder2 15B ===
-for DATASET in bigobench effibench mbpp; do
-  # ISO
-  ./generation_and_testing/pipeline_generate_and_test.sh \
-    --dataset $DATASET \
-    --model starcoder2-15b \
-    --batch_size 4 \
-    --n_generations 5 \
-    --resume
-  
-  # Original
-  ./generation_and_testing/pipeline_generate_and_test.sh \
-    --dataset $DATASET \
-    --model starcoder2-15b \
-    --original \
-    --batch_size 4 \
-    --n_generations 5 \
-    --resume
-done
+  # Ablation families
+  python change_prompts/apply_isomorphisms.py \
+    --dataset $DATASET --iso_family base_conv --seed 42
+  python change_prompts/apply_isomorphisms.py \
+    --dataset $DATASET --iso_family cubic_int --seed 42
 
-# === Codestral 22B ===
-for DATASET in bigobench effibench mbpp; do
-  # ISO
-  ./generation_and_testing/pipeline_generate_and_test.sh \
-    --dataset $DATASET \
-    --model codestral-22b \
-    --batch_size 2 \
-    --n_generations 5 \
-    --resume
-  
-  # Original
-  ./generation_and_testing/pipeline_generate_and_test.sh \
-    --dataset $DATASET \
-    --model codestral-22b \
-    --original \
-    --batch_size 2 \
-    --n_generations 5 \
-    --resume
+  # Synonym fuzzing
+  python change_prompts/prompt_fuzzing.py --dataset $DATASET --mode synonym --fuzz_level 0.2
+  python change_prompts/prompt_fuzzing.py --dataset $DATASET --mode synonym --fuzz_level 0.4
+
+  # Dead-code insertion (length control)
+  python change_prompts/prompt_fuzzing.py --dataset $DATASET --mode deadcode --num_blocks 3
 done
 ```
 
-### Part 3: Compute Stability Metrics
-
-#### Single Model, All Datasets
+### Step 2: Run All Models x All Conditions
 
 ```bash
-# Gemini 2.0 Flash
-./dynamic_stability/run_metrics.sh \
-  --model gemini-2.0-flash \
-  --datasets bigobench,effibench,mbpp
-
-# StarCoder2 15B
-./dynamic_stability/run_metrics.sh \
-  --model starcoder2-15b \
-  --datasets bigobench,effibench,mbpp
-
-# Codestral 22B
-./dynamic_stability/run_metrics.sh \
-  --model codestral-22b \
-  --datasets bigobench,effibench,mbpp
+for MODEL in gemini-2.0-flash gemini-2.5-flash gpt-4o gpt-4o-mini \
+             deepseek-coder-6.7b llama-3.1-8b codellama-13b starcoder2-15b \
+             codestral-22b qwen2.5-coder-32b llama-3.1-70b; do
+  for DATASET in bigobench effibench mbpp; do
+    # All 6 conditions
+    ./generation_and_testing/pipeline_generate_and_test.sh \
+      --dataset $DATASET --model $MODEL --original --resume
+    ./generation_and_testing/pipeline_generate_and_test.sh \
+      --dataset $DATASET --model $MODEL --resume
+    ./generation_and_testing/pipeline_generate_and_test.sh \
+      --dataset $DATASET --model $MODEL --iso_enc_only --resume
+    ./generation_and_testing/pipeline_generate_and_test.sh \
+      --dataset $DATASET --model $MODEL --iso_dec_only --resume
+    ./generation_and_testing/pipeline_generate_and_test.sh \
+      --dataset $DATASET --model $MODEL --fuzz synonym_20 --resume
+    ./generation_and_testing/pipeline_generate_and_test.sh \
+      --dataset $DATASET --model $MODEL --fuzz synonym_40 --resume
+  done
+done
 ```
 
-#### Options
+### Step 3: ISO Family Ablation (Table 8)
 
 ```bash
-# Only SCTD (faster, no execution)
-./dynamic_stability/run_metrics.sh \
-  --model starcoder2-15b \
-  --sctd_only
-
-# Only DCTD (requires execution)
-./dynamic_stability/run_metrics.sh \
-  --model codestral-22b \
-  --dctd_only \
-  --workers 8 \
-  --timeout 30
-
-# Skip plot generation
-./dynamic_stability/run_metrics.sh \
-  --model gemini-2.0-flash \
-  --skip_plots
+for MODEL in gemini-2.0-flash codestral-22b qwen2.5-coder-32b; do
+  for DATASET in bigobench effibench mbpp; do
+    for FAMILY in base_conv cubic_int; do
+      ./generation_and_testing/pipeline_generate_and_test.sh \
+        --dataset $DATASET --model $MODEL --iso_family $FAMILY --resume
+    done
+  done
+done
 ```
 
----
-
-## Direct Script Usage
-
-### Generation (gen_models.py)
+### Step 4: Dead-Code Length Control (Table 9)
 
 ```bash
-# Gemini generation
-python3 ./generation_and_testing/gen_models.py \
-  --dataset bigobench \
-  --model gemini-2.0-flash \
-  --n_generations 5 \
-  --config config.yaml \
-  --resume
-
-# HuggingFace generation with batching
-python3 ./generation_and_testing/gen_models.py \
-  --dataset mbpp \
-  --model starcoder2-15b \
-  --n_generations 5 \
-  --batch_size 4 \
-  --config config.yaml \
-  --resume
-
-# ISO-simple (oracle-help) dataset
-python3 ./generation_and_testing/gen_models.py \
-  --dataset effibench \
-  --model gemini-2.0-flash \
-  --iso_simple \
-  --n_generations 5 \
-  --config config.yaml \
-  --resume
-
-# Original (non-ISO) dataset
-python3 ./generation_and_testing/gen_models.py \
-  --dataset effibench \
-  --model codestral-22b \
-  --original \
-  --n_generations 5 \
-  --batch_size 2 \
-  --config config.yaml
+for MODEL in gemini-2.0-flash codestral-22b llama-3.1-70b; do
+  for DATASET in bigobench mbpp; do
+    ./generation_and_testing/pipeline_generate_and_test.sh \
+      --dataset $DATASET --model $MODEL --fuzz deadcode --resume
+  done
+done
 ```
 
-### Unittests
+### Step 5: Opcode Analysis
 
 ```bash
-python3 ./generation_and_testing/run_unittests.py \
-  --dataset bigobench \
-  --generations_jsonl ./results/starcoder2-15b/bigobench_iso/generations/<FILE>.jsonl \
-  --out_jsonl ./results/starcoder2-15b/bigobench_iso/unittests/<FILE>__unittest.jsonl \
-  --workers 16 \
-  --timeout 10 \
-  --resume
+./opcode_analysis/run_metrics.sh \
+  --model gemini-2.0-flash --datasets bigobench,effibench,mbpp
 ```
 
-### Pass@k Computation
+### Step 6: Bootstrap CIs
 
 ```bash
-python3 ./generation_and_testing/compute_pass_at_k.py \
-  ./results/<model>/<dataset>/unittests/<file>.jsonl
+python analyze_results/bootstrap_ci.py
 ```
-
-### SCTD/DCTD Individual Steps
-
-```bash
-# 1. Prepare metric-ready data
-python3 dynamic_stability/metric_ready.py \
-  --results_root ./results \
-  --out_root ./metrics/ready \
-  --datasets bigobench,effibench,mbpp \
-  --models starcoder2-15b \
-  --rewrite_marker
-
-# 2. Compute SCTD
-python3 dynamic_stability/calculate_sctd.py \
-  --ready_jsonl ./metrics/ready/starcoder2-15b/bigobench/original.ready.jsonl \
-  --out_jsonl ./metrics/sctd/starcoder2-15b/bigobench/sctd_original.jsonl \
-  --store_centroid
-
-# 3. Compute DCTD
-python3 dynamic_stability/calculate_dctd.py \
-  --dataset bigobench \
-  --ready_jsonl ./metrics/ready/starcoder2-15b/bigobench/original.ready.jsonl \
-  --out_jsonl ./metrics/dctd/starcoder2-15b/bigobench/dctd_original.jsonl \
-  --workers 16 \
-  --timeout 15
-
-# 4. Merge and compute energy shift
-python3 dynamic_stability/merge_shift.py \
-  --metric_prefix sctd \
-  --orig_jsonl ./metrics/sctd/starcoder2-15b/bigobench/sctd_original.jsonl \
-  --iso_jsonl ./metrics/sctd/starcoder2-15b/bigobench/sctd_iso.jsonl \
-  --out_jsonl ./metrics/sctd/starcoder2-15b/bigobench/sctd_shift_original_vs_iso.jsonl
-
-# 5. Plot
-python3 metrics/plot_metric_shift.py \
-  --in_jsonl ./metrics/sctd/starcoder2-15b/bigobench/sctd_shift_original_vs_iso.jsonl \
-  --out_png ./metrics/plots/starcoder2-15b_bigobench_sctd_shift.png \
-  --y_key sctd_jsd
-```
-
----
-
-## Output Schema
-
-### Generation JSONL
-
-Each line contains:
-- `dataset`, `model`, `temperature`, `n_generations`
-- `problem_id`, `source_file`, `row_index`, `completion_index`
-- `prompt_used`, `prompt_hash`
-- `generated_solution`, `raw_llm_output`
-- `finish_reason`, `error_message`, `latency_s`
-- `is_original`, `iso_applied`, `iso_family`, `iso_seed`, `iso_params`
-- `row_meta`, `generation_metadata`
-
-### Unittest JSONL
-
-Each line contains:
-- `dataset`, `model`, `temperature`
-- `problem_id`, `completion_index`, `source_file`, `row_index`
-- `status` (`success`, `test_failure`, `execution_error`, `timeout`, `error`)
-- `pass` (boolean)
-- `error`, `time_s`, `timeout`
-- `iso_family`, `iso_seed`, `iso_params`
-
-### Join Key
-
-Generation and unittest JSONLs are joinable by:
-```
-(dataset, model, temperature, problem_id, completion_index)
-```
-
----
-
-## Experimental Results
-
-### Gemini 2.0 Flash (temp=0.0, n=5)
-
-| Dataset | Condition | Problems | Pass@1 | Pass@5 |
-|---------|-----------|----------|--------|--------|
-| **BigOBench** | Original | 311 | **66.1%** | **68.7%** |
-| **BigOBench** | ISO | 311 | 50.3% | 53.4% |
-| **EffiBench** | Original | 338 | **27.3%** | **56.4%** |
-| **EffiBench** | ISO | 338 | 29.3% | 32.5% |
-| **MBPP** | Original | 257 | **80.8%** | **81.7%** |
-| **MBPP** | ISO | 257 | 58.1% | 61.1% |
-
-### Energy Distance Results (Gemini 2.0 Flash)
-
-Quantifies the distribution shift magnitude between Original and ISO representations. Higher values indicate larger phenotype drift.
-
-| Dataset | Metric | Energy Distance (ED) |
-|---------|--------|----------------------|
-| **BigOBench** | SCTD | 0.0060 |
-| **BigOBench** | DCTD | 0.0144 |
-| **EffiBench** | SCTD | N/A (check plot) |
-| **EffiBench** | DCTD | 0.0000 |
-| **MBPP** | SCTD | 0.0105 |
-| **MBPP** | DCTD | 0.0026 |
 
 ---
 
 ## Transform Families
 
-| Family | Description | Use Case |
-|--------|-------------|----------|
-| `affine_int` | `x' = a*x + b` for integers | Universal, low overhead |
-| `label_permutation` | Bijective label remapping | Discrete tokens (A→C, B→A, etc.) |
-| `basek_int` | Integer → base-16/36 string | When string encoding is acceptable |
-| `delimiter_rewrite` | Change delimiters (space→comma) | Structured output formatting |
-| `identity` | No transformation (control) | Baseline comparison |
-
----
-
-## Requirements
-
-- Python 3.8+
-
-Install dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-Or individually:
-- `pyyaml`, `tqdm` (core dependencies)
-- `google-generativeai` (for Gemini models)
-- `transformers>=4.36.0`, `torch>=2.0.0`, `accelerate` (for HuggingFace models)
-- `scipy`, `numpy` (for metrics)
-- `matplotlib` (for plotting)
-
----
-
-## NeurIPS Framing
-
-This work contributes:
-
-1. **A principled robustness probe** beyond paraphrases: invertible I/O isomorphisms + identity control
-2. **A measurable "invariance gap"**: between-condition drift vs within-condition spread
-3. **Practical mitigations**: canonical I/O contracts, schema normalization, augmentation strategies
-
-The target is **representation-invariant execution**—stable algorithmic behavior under equivalent representations, up to predictable encode/decode overhead.
+| Family               | CLI name     | Transform     | Inverse            |
+|----------------------|--------------|---------------|--------------------|
+| **Affine** (primary) | `affine_int` | x' = a·x + b | x = (x' − b) / a  |
+| **Base conversion**  | `base_conv`  | Decimal→base-b| Base-b→decimal     |
+| **Cubic polynomial** | `cubic_int`  | x' = x³ + c  | x = ∛(x' − c)     |

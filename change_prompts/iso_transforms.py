@@ -174,118 +174,26 @@ Examples:
 """
 
 
-class LabelPermutationTransform(Transform):
+class CubicIntTransform(Transform):
     """
-    Bijective token/label remapping.
-    
-    Discovers discrete labels in the text and creates a permutation map.
+    Cubic integer transform: x' = x³ + c
+
+    Bijective over the integers (cube is strictly monotone and the cube
+    root of an integer is unique).  Targets the *nonlinear arithmetic*
+    axis: the model must compute a cube root to decode, which is
+    qualitatively harder than the linear inverse of affine.
     """
-    
+
     @property
     def name(self) -> str:
-        return "label_permutation"
-    
-    # Default label alphabet
-    DEFAULT_LABELS = list(string.ascii_uppercase[:10])  # A-J
-    
+        return "cubic_int"
+
     def sample_params(self, seed: int) -> Dict[str, Any]:
         rng = random.Random(seed)
-        labels = self.DEFAULT_LABELS.copy()
-        shuffled = labels.copy()
-        rng.shuffle(shuffled)
-        
-        # Create forward and inverse maps
-        forward_map = dict(zip(labels, shuffled))
-        inverse_map = dict(zip(shuffled, labels))
-        
-        return {
-            "forward_map": forward_map,
-            "inverse_map": inverse_map,
-            "labels": labels
-        }
-    
-    def _apply_map(self, text: str, mapping: Dict[str, str]) -> str:
-        """Apply character-level mapping."""
-        result = []
-        for char in text:
-            result.append(mapping.get(char, char))
-        return "".join(result)
-    
-    def forward(self, value: str, params: Dict[str, Any]) -> str:
-        return self._apply_map(value, params["forward_map"])
-    
-    def inverse(self, value: str, params: Dict[str, Any]) -> str:
-        return self._apply_map(value, params["inverse_map"])
-    
-    def contract(self, params: Dict[str, Any]) -> str:
-        fmap = params["forward_map"]
-        # Show a few mappings
-        examples = list(fmap.items())[:5]
-        mapping_str = ", ".join(f"{k}→{v}" for k, v in examples)
-        
-        return f"""### Encoding Contract (must follow exactly)
-Labels in the input have been permuted using a fixed bijection.
-Mapping (showing first 5): {mapping_str}
-Apply the same mapping to your output labels.
+        c = rng.randint(-50, 50)
+        return {"c": c}
 
-Examples:
-- If you see '{examples[0][1]}' in input, it represents original label '{examples[0][0]}'
-- If your answer should be '{examples[0][0]}', output '{examples[0][1]}' instead
-"""
-
-
-class BaseKIntTransform(Transform):
-    """
-    Encode integers as base-k strings (e.g., base-16 or base-36).
-    
-    Integers are encoded with a prefix (e.g., 'x') for unambiguous parsing.
-    """
-    
-    @property
-    def name(self) -> str:
-        return "basek_int"
-    
-    BASES = [16, 36]
-    DIGITS = string.digits + string.ascii_lowercase
-    
-    def sample_params(self, seed: int) -> Dict[str, Any]:
-        rng = random.Random(seed)
-        base = rng.choice(self.BASES)
-        prefix = rng.choice(["#", "@", "x"])
-        return {"base": base, "prefix": prefix}
-    
-    def _int_to_basek(self, n: int, base: int) -> str:
-        """Convert integer to base-k string."""
-        if n == 0:
-            return "0"
-        
-        sign = ""
-        if n < 0:
-            sign = "-"
-            n = -n
-        
-        digits = []
-        while n:
-            digits.append(self.DIGITS[n % base])
-            n //= base
-        
-        return sign + "".join(reversed(digits))
-    
-    def _basek_to_int(self, s: str, base: int) -> int:
-        """Convert base-k string to integer."""
-        sign = 1
-        if s.startswith("-"):
-            sign = -1
-            s = s[1:]
-        
-        result = 0
-        for char in s:
-            result = result * base + self.DIGITS.index(char.lower())
-        
-        return sign * result
-    
     def _find_integers(self, text: str) -> List[Tuple[int, int, str, int]]:
-        """Find all integers in text."""
         pattern = r'(?<![.\d])(-?\d+)(?![.\d])'
         matches = []
         for m in re.finditer(pattern, text):
@@ -295,65 +203,178 @@ class BaseKIntTransform(Transform):
             except ValueError:
                 continue
         return matches
-    
-    def _find_encoded(self, text: str, prefix: str, base: int) -> List[Tuple[int, int, str, int]]:
-        """Find all encoded integers in text."""
-        # Match prefix followed by base-k digits
-        if base <= 10:
-            digit_pattern = r'\d'
-        else:
-            digit_pattern = r'[0-9a-zA-Z]'
-        
-        pattern = re.escape(prefix) + r'(-?' + digit_pattern + r'+)'
-        matches = []
-        for m in re.finditer(pattern, text):
-            try:
-                encoded = m.group(1)
-                val = self._basek_to_int(encoded, base)
-                matches.append((m.start(), m.end(), m.group(0), val))
-            except (ValueError, IndexError):
-                continue
-        return matches
-    
+
+    @staticmethod
+    def _icbrt(n: int) -> int:
+        """Integer cube root (exact). Raises ValueError if not a perfect cube."""
+        if n == 0:
+            return 0
+        sign = 1 if n > 0 else -1
+        a = abs(n)
+        # Newton's method for integer cube root
+        x = int(round(a ** (1 / 3)))
+        # Check x-1, x, x+1 to handle floating-point imprecision
+        for candidate in (x - 1, x, x + 1):
+            if candidate >= 0 and candidate ** 3 == a:
+                return sign * candidate
+        raise ValueError(f"{n} is not a perfect cube")
+
     def forward(self, value: str, params: Dict[str, Any]) -> str:
-        base = params["base"]
-        prefix = params["prefix"]
+        c = params["c"]
         matches = self._find_integers(value)
-        
         result = value
         for start, end, orig_str, val in reversed(matches):
-            encoded = prefix + self._int_to_basek(val, base)
-            result = result[:start] + encoded + result[end:]
-        
+            new_val = val ** 3 + c
+            result = result[:start] + str(new_val) + result[end:]
         return result
-    
+
     def inverse(self, value: str, params: Dict[str, Any]) -> str:
-        base = params["base"]
-        prefix = params["prefix"]
-        matches = self._find_encoded(value, prefix, base)
-        
+        c = params["c"]
+        matches = self._find_integers(value)
         result = value
         for start, end, orig_str, val in reversed(matches):
-            result = result[:start] + str(val) + result[end:]
-        
+            try:
+                orig_val = self._icbrt(val - c)
+                result = result[:start] + str(orig_val) + result[end:]
+            except ValueError:
+                continue
         return result
-    
+
     def contract(self, params: Dict[str, Any]) -> str:
-        base = params["base"]
-        prefix = params["prefix"]
-        
-        example_orig = 42
-        example_enc = prefix + self._int_to_basek(example_orig, base)
-        
+        c = params["c"]
+        sign_c = "+" if c >= 0 else "-"
+        abs_c = abs(c)
+
+        example_orig = 5
+        example_enc = example_orig ** 3 + c
+
         return f"""### Encoding Contract (must follow exactly)
-All integers are encoded in base-{base} with prefix '{prefix}'.
-To decode: remove prefix, parse as base-{base} integer.
+All integers in the input have been encoded using the formula: x_enc = x_orig**3 {sign_c} {abs_c}
+To decode an encoded input integer `x_enc`, use:
+    val = x_enc {'-' if c >= 0 else '+'} {abs_c}
+    x_orig = int(round(abs(val) ** (1/3))) * (1 if val >= 0 else -1)
+To encode an original integer `x_orig`, use:
+    x_enc = x_orig**3 {sign_c} {abs_c}
 Your output integers must also be encoded the same way.
 
 Examples:
-- Input '{example_enc}' represents the integer {example_orig}
-- If your answer is {example_orig}, output '{example_enc}'
-- If your answer is 0, output '{prefix}0'
+- An input value that appears as {example_enc} represents the original value {example_orig}
+- If your computed answer is {example_orig}, you must output {example_enc}
+- If your computed answer is 0, you must output {c}
+"""
+
+
+class BaseKIntTransform(Transform):
+    """
+    Base-conversion codec: reinterpret each integer's decimal digit string
+    as a base-b numeral and emit its decimal value.
+
+    Example (base 16):
+      42  →  digits "42"  →  interpret as hex 0x42  →  66 decimal
+      66  →  digits "66"  →  interpret as hex 0x66  →  102 decimal  (NOT the inverse)
+
+    Inverse: convert the decimal value TO base-b, read resulting digit
+    string as a plain decimal number.
+      66  →  to hex "42"  →  read as decimal  →  42  ✓
+
+    The output is always a plain integer, so stdin/stdout parsing and
+    Python assert syntax are never broken.
+    """
+
+    @property
+    def name(self) -> str:
+        return "basek_int"
+
+    BASES = [16]
+    DIGITS = string.digits + string.ascii_lowercase
+
+    def sample_params(self, seed: int) -> Dict[str, Any]:
+        rng = random.Random(seed)
+        base = rng.choice(self.BASES)
+        return {"base": base}
+
+    def _decimal_digits_as_base(self, n: int, base: int) -> Optional[int]:
+        """Reinterpret the decimal digit-string of *n* as a base-*base*
+        numeral and return the resulting integer, or None if any digit
+        is >= base."""
+        sign = 1
+        if n < 0:
+            sign = -1
+            n = -n
+        s = str(n)
+        for ch in s:
+            if int(ch) >= base:
+                return None
+        return sign * int(s, base)
+
+    def _int_to_base_digits(self, n: int, base: int) -> str:
+        """Convert *n* to its base-*base* representation (digit chars only)."""
+        if n == 0:
+            return "0"
+        sign = ""
+        if n < 0:
+            sign = "-"
+            n = -n
+        digits = []
+        while n:
+            digits.append(self.DIGITS[n % base])
+            n //= base
+        return sign + "".join(reversed(digits))
+
+    def _find_integers(self, text: str) -> List[Tuple[int, int, str, int]]:
+        pattern = r'(?<![.\d])(-?\d+)(?![.\d])'
+        matches = []
+        for m in re.finditer(pattern, text):
+            try:
+                val = int(m.group(1))
+                matches.append((m.start(), m.end(), m.group(1), val))
+            except ValueError:
+                continue
+        return matches
+
+    def forward(self, value: str, params: Dict[str, Any]) -> str:
+        base = params["base"]
+        matches = self._find_integers(value)
+        result = value
+        for start, end, orig_str, val in reversed(matches):
+            enc = self._decimal_digits_as_base(val, base)
+            if enc is None:
+                continue
+            result = result[:start] + str(enc) + result[end:]
+        return result
+
+    def inverse(self, value: str, params: Dict[str, Any]) -> str:
+        base = params["base"]
+        matches = self._find_integers(value)
+        result = value
+        for start, end, orig_str, val in reversed(matches):
+            dec_str = self._int_to_base_digits(val, base)
+            if not all(c.isdigit() for c in dec_str.lstrip("-")):
+                continue
+            result = result[:start] + dec_str + result[end:]
+        return result
+
+    def contract(self, params: Dict[str, Any]) -> str:
+        base = params["base"]
+        example_orig = 42
+        enc = self._decimal_digits_as_base(example_orig, base)
+        zero_enc = self._decimal_digits_as_base(0, base)
+
+        fmt_char = "x" if base == 16 else ("o" if base == 8 else "d")
+        
+        return f"""### Encoding Contract (must follow exactly)
+All integers have been re-encoded: each digit string is reinterpreted as a base-{base} numeral.
+To decode an encoded input integer `x_enc`, use:
+    sign = "-" if x_enc < 0 else ""
+    x_orig = int(f"{{sign}}{{abs(x_enc):{fmt_char}}}")
+To encode an original integer `x_orig`, use:
+    x_enc = int(str(x_orig), {base})
+Your output integers must also be encoded the same way.
+
+Examples:
+- An input value {enc} represents the original value {example_orig} (because "{example_orig}" in base {base} = {enc} in decimal)
+- If your computed answer is {example_orig}, you must output {enc}
+- If your computed answer is 0, you must output {zero_enc}
 """
 
 
@@ -482,8 +503,9 @@ Process values as-is.
 # Registry of all transforms
 TRANSFORMS: Dict[str, Transform] = {
     "affine_int": AffineIntTransform(),
-    "label_permutation": LabelPermutationTransform(),
+    "cubic_int": CubicIntTransform(),
     "basek_int": BaseKIntTransform(),
+    "base_conv": BaseKIntTransform(),
     "delimiter_rewrite": DelimiterRewriteTransform(),
     "identity": IdentityTransform(),
 }

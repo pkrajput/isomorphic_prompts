@@ -79,40 +79,52 @@ def load_original_tests(
     source_file: str,
     row_index: int,
     is_original: bool = False,
-    iso_variant: Optional[str] = None
+    iso_variant: Optional[str] = None,
+    iso_family: Optional[str] = None,
+    fuzz_tag: Optional[str] = None,
 ) -> Optional[dict]:
     """
     Load tests from the dataset file.
     
     For ISO datasets: Returns tests_transformed if available, else tests.
     For Original datasets: Returns tests directly from the original file.
+    For fuzz datasets: Returns tests from the fuzz subdirectory.
     For pass_entire_row datasets (effibench, mbpp): Returns the entire row,
         but substitutes the original test fields with tests_transformed for ISO.
     """
     config = DATASET_CONFIG[dataset]
     
     # Determine the correct directory based on original vs iso
-    if is_original:
-        # Original datasets use their directory names
-        dir_mapping = {
-            "bigobench": "BigOBench",
-            "effibench": "Effibench",
-            "mbpp": "mbpp",
-        }
-        data_dir = dir_mapping.get(dataset, dataset)
+    ds_top_map = {"bigobench": "BigOBench", "effibench": "Effibench", "mbpp": "mbpp"}
+    ds_top = ds_top_map.get(dataset, dataset)
+
+    FAMILY_DIR = {
+        "affine_int": "affine",
+        "basek_int": "base_conv",
+        "base_conv": "base_conv",
+        "cubic_int": "cubic",
+    }
+    family_short = FAMILY_DIR.get(iso_family, "affine")
+
+    if fuzz_tag:
+        sub_dir = fuzz_tag
+    elif is_original:
+        sub_dir = "original"
+    elif iso_variant in ("iso_simple", "iso_dec_only"):
+        sub_dir = f"iso_{family_short}_oracle"
+    elif iso_variant in ("iso_encode_only", "iso_enc_only"):
+        sub_dir = f"iso_{family_short}_encode_only"
     else:
-        if iso_variant == "iso_simple":
-            data_dir = f"{dataset}_iso_simple"
-        else:
-            data_dir = f"{dataset}_iso"
-    
-    data_path = Path(datasets_root) / data_dir / source_file
-    
+        sub_dir = f"iso_{family_short}"
+
+    data_path = Path(datasets_root) / ds_top / sub_dir / source_file
+
     if not data_path.exists():
-        # Try alternate paths
         alt_paths = [
-            Path(datasets_root) / data_dir / source_file.replace(".iso", ""),
-            Path(datasets_root) / data_dir / (source_file + ".iso"),
+            Path(datasets_root) / ds_top / sub_dir / source_file.replace(".iso", ""),
+            Path(datasets_root) / ds_top / sub_dir / (source_file + ".iso"),
+            # Legacy flat layout fallback
+            Path(datasets_root) / ds_top / source_file,
         ]
         for alt in alt_paths:
             if alt.exists():
@@ -324,12 +336,15 @@ def main():
             row_index = record.get("row_index", 0)
             is_original = record.get("is_original", False)
             iso_variant = record.get("iso_variant")
-            cache_key = (source_file, row_index, is_original, iso_variant)
+            iso_family = record.get("iso_family")
+            fuzz_tag = record.get("fuzz_tag")
+            cache_key = (source_file, row_index, is_original, iso_variant, iso_family, fuzz_tag)
             
             if cache_key not in tests_cache:
                 tests_obj = load_original_tests(
                     args.datasets_root, args.dataset, source_file, row_index,
-                    is_original=is_original, iso_variant=iso_variant
+                    is_original=is_original, iso_variant=iso_variant,
+                    iso_family=iso_family, fuzz_tag=fuzz_tag,
                 )
                 tests_cache[cache_key] = tests_obj
             

@@ -107,49 +107,67 @@ class BigOBenchAdapter:
         
         return transformed, samples
 
+    def apply_transform_outputs_only(
+        self,
+        tests: Dict[str, List[Dict[str, str]]],
+        transform: Transform,
+        params: Dict[str, Any]
+    ) -> Tuple[Dict[str, List[Dict[str, str]]], List[str]]:
+        """Encode-only: keep original inputs, transform only outputs."""
+        samples = self._collect_io_samples(tests)
+        transformed = {}
+        for test_type in ["public_tests", "private_tests"]:
+            transformed[test_type] = []
+            for test in tests.get(test_type, []):
+                new_test = dict(test)
+                if "output" in test:
+                    new_test["output"] = self._transform_io_value(test["output"], transform, params)
+                transformed[test_type].append(new_test)
+        return transformed, samples
+
     def format_oracle_help_inputs(
         self,
         tests: Dict[str, List[Dict[str, str]]],
         tests_transformed: Dict[str, List[Dict[str, str]]]
     ) -> str:
         """
-        Format oracle-help input pairs (encoded vs decoded) for prompts.
-        Only inputs are shown; outputs remain encoded per contract.
+        Compact oracle block: show at most 2 worked examples so the model
+        sees what decoded inputs look like without bloating the prompt.
         """
         if not tests or not tests_transformed:
             return ""
-        
-        pairs = []
+
+        examples = []
         for test_type in ["public_tests", "private_tests"]:
             orig_list = tests.get(test_type, []) or []
             enc_list = tests_transformed.get(test_type, []) or []
-            
-            for idx, (orig, enc) in enumerate(zip(orig_list, enc_list)):
+            for orig, enc in zip(orig_list, enc_list):
                 orig_in = orig.get("input", "")
                 enc_in = enc.get("input", "")
-                if orig_in or enc_in:
-                    label = f"{test_type} #{idx + 1}"
-                    pairs.append((label, enc_in, orig_in))
-        
-        if not pairs:
+                if orig_in and enc_in and orig_in != enc_in:
+                    examples.append((enc_in, orig_in))
+                if len(examples) >= 2:
+                    break
+            if len(examples) >= 2:
+                break
+
+        if not examples:
             return ""
-        
+
         lines = [
-            "### Oracle-Provided Decoded Inputs",
-            "The inputs below are provided in both encoded and decoded form.",
-            "Use the decoded inputs to solve the task, but return ONLY encoded outputs.",
+            "### Decoded-Input Examples",
+            "Below are example decoded inputs so you can verify your decoding.",
+            "Apply the same decoding to all test inputs; return ONLY encoded outputs.",
             "",
         ]
-        
-        for label, enc_in, orig_in in pairs:
-            lines.append(f"Test case: {label}")
-            lines.append("Encoded input:")
-            lines.append(enc_in)
-            lines.append("Decoded input (oracle-provided):")
-            lines.append(orig_in)
-            lines.append("---")
-        
-        return "\n".join(lines).strip()
+        for i, (enc_in, orig_in) in enumerate(examples, 1):
+            enc_short = enc_in if len(enc_in) <= 120 else enc_in[:120] + " ..."
+            orig_short = orig_in if len(orig_in) <= 120 else orig_in[:120] + " ..."
+            lines.append(f"Example {i}:")
+            lines.append(f"  Encoded:  {enc_short}")
+            lines.append(f"  Decoded:  {orig_short}")
+
+        return "\n".join(lines)
     
     def rebuild_row(
         self,

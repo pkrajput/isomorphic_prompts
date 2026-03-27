@@ -123,47 +123,63 @@ class MBPPAdapter:
         
         return transformed, samples
 
+    def apply_transform_outputs_only(
+        self,
+        tests: List[str],
+        transform: Transform,
+        params: Dict[str, Any]
+    ) -> Tuple[List[str], List[str]]:
+        """Encode-only: keep original inputs, transform only expected outputs."""
+        samples = self._collect_io_samples(tests)
+        transformed = []
+        for test in tests:
+            func_call, expected, original = self._extract_values_from_assert(test)
+            if func_call and expected:
+                transformed_expected = self._transform_io_value(expected, transform, params)
+                new_test = f"assert {func_call} == {transformed_expected}"
+                transformed.append(new_test)
+            else:
+                transformed.append(original)
+        return transformed, samples
+
     def format_oracle_help_inputs(
         self,
         tests: List[str],
         tests_transformed: List[str]
     ) -> str:
         """
-        Format oracle-help input pairs (encoded vs decoded) for prompts.
-        Only inputs are shown; outputs remain encoded per contract.
+        Compact oracle block: show at most 2 worked examples so the model
+        sees what decoded inputs look like without bloating the prompt.
         """
         if not tests or not tests_transformed:
             return ""
-        
-        pairs = []
-        for idx, (orig, enc) in enumerate(zip(tests, tests_transformed)):
+
+        examples = []
+        for orig, enc in zip(tests, tests_transformed):
             orig_call, _, _ = self._extract_values_from_assert(orig)
             enc_call, _, _ = self._extract_values_from_assert(enc)
             orig_args = self._extract_args_from_func_call(orig_call)
             enc_args = self._extract_args_from_func_call(enc_call)
-            if orig_args or enc_args:
-                label = f"test #{idx + 1}"
-                pairs.append((label, enc_args, orig_args))
-        
-        if not pairs:
+            if orig_args and enc_args and orig_args != enc_args:
+                examples.append((enc_args, orig_args))
+            if len(examples) >= 2:
+                break
+
+        if not examples:
             return ""
-        
+
         lines = [
-            "### Oracle-Provided Decoded Inputs",
-            "The inputs below are provided in both encoded and decoded form.",
-            "Use the decoded inputs to solve the task, but return ONLY encoded outputs.",
+            "### Decoded-Input Examples",
+            "Below are example decoded inputs so you can verify your decoding.",
+            "Apply the same decoding to all test inputs; return ONLY encoded outputs.",
             "",
         ]
-        
-        for label, enc_args, orig_args in pairs:
-            lines.append(f"Test case: {label}")
-            lines.append("Encoded input args:")
-            lines.append(enc_args)
-            lines.append("Decoded input args (oracle-provided):")
-            lines.append(orig_args)
-            lines.append("---")
-        
-        return "\n".join(lines).strip()
+        for i, (enc_args, orig_args) in enumerate(examples, 1):
+            lines.append(f"Example {i}:")
+            lines.append(f"  Encoded args:  {enc_args}")
+            lines.append(f"  Decoded args:  {orig_args}")
+
+        return "\n".join(lines)
     
     def rebuild_row(
         self,

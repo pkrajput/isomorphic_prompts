@@ -1,30 +1,21 @@
 #!/usr/bin/env python3
 """
-prompt_fuzzing.py  --  Fuzz natural-language prompts in coding benchmarks.
+prompt_fuzzing.py -- Fuzz prompts via synonym substitution or dead-code insertion.
 
-Two perturbation modes, both standard in the robustness / memorization
-literature (cf. ReCode, Wang et al. ACL 2023):
+Output goes to datasets/<DS>/<synonym_XX|deadcode>/.
 
-  1.  synonym   -- replace content words with WordNet synonyms at
-                   probability --fuzz_level (float 0-1).
-  2.  deadcode  -- insert dead Python code blocks into the prompt.
-
-Usage
------
+Usage:
   python prompt_fuzzing.py --dataset bigobench --mode synonym --fuzz_level 0.2
   python prompt_fuzzing.py --dataset mbpp --mode deadcode --num_blocks 3
-
-Output goes to  datasets/<name>_<mode>_<tag>/
 """
 
 import argparse
 import json
-import os
 import random
 import re
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import nltk
 from nltk.corpus import stopwords, wordnet
@@ -151,15 +142,18 @@ def insert_dead_code(text, num_blocks, rng):
 
 def process_dataset(dataset, mode, fuzz_level, num_blocks, seed, datasets_root):
     cfg = DATASET_CONFIG[dataset]
-    src_dir = datasets_root / cfg["src_dir"]
+    src_top = datasets_root / cfg["src_dir"]
+
+    # Prefer <DS>/original/ subfolder (new layout), fallback to flat
+    src_dir = src_top / "original" if (src_top / "original").is_dir() else src_top
 
     if mode == "synonym":
         tag = str(int(fuzz_level * 100)).zfill(2)
-        out_name = f"{dataset}_synonym_{tag}"
+        sub_name = f"synonym_{tag}"
     else:
-        out_name = f"{dataset}_deadcode"
+        sub_name = "deadcode"
 
-    out_dir = datasets_root / out_name
+    out_dir = src_top / sub_name
     out_dir.mkdir(parents=True, exist_ok=True)
 
     src_files = sorted(src_dir.glob("*.jsonl"))

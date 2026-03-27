@@ -34,20 +34,34 @@ def load_schema_report(dataset: str, reports_dir: Path) -> Optional[Dict]:
 
 
 def find_dataset_files(dataset: str, datasets_root: Path, adapter) -> List[Path]:
-    """Find all JSONL files for a dataset."""
-    # Handle case-insensitive matching
+    """Find original JSONL files for a dataset.
+
+    Supports both the reorganised layout (datasets/<DS>/original/*.jsonl)
+    and the legacy flat layout (datasets/<DS>/*.jsonl).
+    """
     expected_dir_name = adapter.get_dataset_dir_name()
-    
+
+    # Try case-insensitive matching
+    matched_dir = None
     for child in datasets_root.iterdir():
         if child.is_dir() and child.name.lower() == expected_dir_name.lower():
-            return list(child.glob("*.jsonl"))
-    
-    # Fallback: try exact name
-    dataset_dir = datasets_root / expected_dir_name
-    if dataset_dir.exists():
-        return list(dataset_dir.glob("*.jsonl"))
-    
-    return []
+            matched_dir = child
+            break
+    if matched_dir is None:
+        matched_dir = datasets_root / expected_dir_name
+
+    if not matched_dir.exists():
+        return []
+
+    # Prefer <DS>/original/ subfolder (new layout)
+    orig_sub = matched_dir / "original"
+    if orig_sub.is_dir():
+        files = list(orig_sub.glob("*.jsonl"))
+        if files:
+            return files
+
+    # Fallback: JSONL files directly under <DS>/
+    return list(matched_dir.glob("*.jsonl"))
 
 
 def process_row(
@@ -59,7 +73,8 @@ def process_row(
     iso_family: str,
     seed: int,
     identity_control: bool,
-    oracle_help_inputs: bool
+    oracle_help_inputs: bool,
+    encode_only: bool = False,
 ) -> Dict[str, Any]:
     """
     Process a single row: extract, transform, verify, rebuild.
@@ -68,6 +83,13 @@ def process_row(
         # Extract prompt and tests
         prompt = adapter.extract_prompt(row, schema_report)
         tests = adapter.extract_tests(row, schema_report)
+
+        if encode_only:
+            variant = "iso_enc_only"
+        elif oracle_help_inputs:
+            variant = "iso_dec_only"
+        else:
+            variant = "iso"
         
         # Check if we have valid data
         if not prompt or not tests:
@@ -80,7 +102,7 @@ def process_row(
                     "iso_family": iso_family,
                     "iso_seed": seed,
                     "iso_params": params,
-                    "iso_variant": "iso_simple" if oracle_help_inputs else "iso",
+                    "iso_variant": variant,
                     "iso_proof": {
                         "roundtrip_ok": False,
                         "n_checked": 0,
@@ -95,6 +117,19 @@ def process_row(
             tests_transformed = tests  # Keep original
             samples = []
             contract = generate_identity_contract()
+        elif encode_only:
+            tests_transformed, samples = adapter.apply_transform_outputs_only(tests, transform, params)
+            a, b = params.get("a", "?"), params.get("b", "?")
+            sign_b = "+" if b >= 0 else "-"
+            abs_b = abs(b)
+            contract = f"""### Encoding Contract (must follow exactly)
+Your inputs are in their original (unencoded) form --- read them as-is.
+Your output integers must be encoded using the formula: x' = {a}*x {sign_b} {abs_b}
+
+Examples:
+- If your computed answer is 10, you must output {a*10+b}
+- If your computed answer is 0, you must output {b}
+"""
         else:
             tests_transformed, samples = adapter.apply_transform_to_tests(tests, transform, params)
             contract = transform.contract(params)
@@ -129,7 +164,7 @@ def process_row(
                 "iso_seed": seed,
                 "iso_params": params,
                 "iso_proof": proof,
-                "iso_variant": "iso_simple" if oracle_help_inputs else "iso"
+                "iso_variant": variant,
             }
         )
     
@@ -144,7 +179,7 @@ def process_row(
                 "iso_family": iso_family,
                 "iso_seed": seed,
                 "iso_params": params,
-                "iso_variant": "iso_simple" if oracle_help_inputs else "iso",
+                "iso_variant": "iso_dec_only" if oracle_help_inputs else "iso",
                 "iso_proof": {
                     "roundtrip_ok": False,
                     "n_checked": 0,
@@ -167,7 +202,9 @@ def process_file(
     identity_control: bool,
     oracle_help_inputs: bool,
     max_rows: Optional[int] = None,
-    dry_run: bool = False
+    dry_run: bool = False,
+    max_test_chars: Optional[int] = None,
+    encode_only: bool = False,
 ) -> Dict[str, int]:
     """
     Process a single JSONL file.
@@ -179,7 +216,8 @@ def process_file(
         "processed": 0,
         "iso_applied": 0,
         "roundtrip_ok": 0,
-        "errors": 0
+        "errors": 0,
+        "skipped_large": 0,
     }
     
     if dry_run:
@@ -200,17 +238,29 @@ def process_file(
                     continue
                 
                 stats["total"] += 1
-                
+
                 try:
                     row = json.loads(line)
                 except json.JSONDecodeError as e:
                     stats["errors"] += 1
                     continue
-                
+
+                # Skip rows whose raw test payload exceeds the cap
+                if max_test_chars:
+                    raw_tests = row.get("generated_tests", row.get("tests", ""))
+                    test_len = len(raw_tests) if isinstance(raw_tests, str) else len(json.dumps(raw_tests))
+                    if test_len > max_test_chars:
+                        stats["skipped_large"] += 1
+                        # Still write the row through untransformed so
+                        # indices stay aligned with the original file
+                        fout.write(json.dumps(row) + "\n")
+                        continue
+
                 # Process the row
                 new_row = process_row(
                     row, adapter, transform, params,
-                    schema_report, iso_family, seed, identity_control, oracle_help_inputs
+                    schema_report, iso_family, seed, identity_control, oracle_help_inputs,
+                    encode_only=encode_only,
                 )
                 
                 stats["processed"] += 1
@@ -249,7 +299,7 @@ def main():
                         help="Directory containing schema reports")
     parser.add_argument("--iso_family", type=str, required=True,
                         choices=list_transforms(),
-                        help="Transform family to apply")
+                        help="Transform family: affine_int, base_conv, digit_permutation, identity, ...")
     parser.add_argument("--seed", type=int, default=42,
                         help="Random seed for transform parameters")
     parser.add_argument("--max_rows", type=int, default=None,
@@ -260,17 +310,33 @@ def main():
                         help="Apply identity transform (control experiment)")
     parser.add_argument("--oracle_help_inputs", action="store_true",
                         help="Oracle-help ablation: show decoded inputs alongside encoded inputs")
-    
+    parser.add_argument("--encode_only", action="store_true",
+                        help="Encode-only ablation: keep original inputs, only encode outputs")
+    parser.add_argument("--max_test_chars", type=int, default=None,
+                        help="Skip transform for rows whose raw test payload exceeds this many chars (write row untransformed)")
+
     args = parser.parse_args()
     
     # Paths
     datasets_root = Path(args.datasets_root)
-    # Default output to datasets/<dataset>_iso or <dataset>_iso_simple
+
+    # Resolve the dataset's top-level directory name (preserving case)
+    dataset_dir_map = {"bigobench": "BigOBench", "effibench": "Effibench", "mbpp": "mbpp"}
+    ds_dir_name = dataset_dir_map.get(args.dataset, args.dataset)
+
+    # Build a human-readable variant sub-folder name
+    family_alias = {"affine_int": "affine", "basek_int": "base_conv",
+                     "base_conv": "base_conv", "cubic_int": "cubic",
+                     "identity": "identity"}
+    family_short = family_alias.get(args.iso_family, args.iso_family)
+
     if args.out_root is None:
-        if args.oracle_help_inputs:
-            out_root = datasets_root / f"{args.dataset}_iso_simple"
+        if args.encode_only:
+            out_root = datasets_root / ds_dir_name / f"iso_{family_short}_encode_only"
+        elif args.oracle_help_inputs:
+            out_root = datasets_root / ds_dir_name / f"iso_{family_short}_oracle"
         else:
-            out_root = datasets_root / f"{args.dataset}_iso"
+            out_root = datasets_root / ds_dir_name / f"iso_{family_short}"
     else:
         out_root = Path(args.out_root)
     reports_dir = Path(args.reports_dir)
@@ -294,6 +360,7 @@ def main():
     print(f"Seed: {args.seed}")
     print(f"Identity control: {args.identity_control}")
     print(f"Oracle-help inputs: {args.oracle_help_inputs}")
+    print(f"Encode-only: {args.encode_only}")
     print()
     
     # Find input files
@@ -310,7 +377,8 @@ def main():
         "processed": 0,
         "iso_applied": 0,
         "roundtrip_ok": 0,
-        "errors": 0
+        "errors": 0,
+        "skipped_large": 0,
     }
     
     for input_file in input_files:
@@ -322,7 +390,9 @@ def main():
             input_file, output_file, adapter, transform, params,
             schema_report, args.iso_family, args.seed,
             args.identity_control, args.oracle_help_inputs,
-            args.max_rows, args.dry_run
+            args.max_rows, args.dry_run,
+            max_test_chars=args.max_test_chars,
+            encode_only=args.encode_only,
         )
         
         for k, v in stats.items():

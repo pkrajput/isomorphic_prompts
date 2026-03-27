@@ -1,0 +1,76 @@
+Dataset,Model,Condition,Pass@1,Pass@5
+BIGOBENCH,Gemini-2.0-Flash,Original,65.88,68.59
+BIGOBENCH,Gemini-2.0-Flash,ISO,50.34,53.59
+BIGOBENCH,Gemini-2.0-Flash,ISO (dec only),51.41,56.09
+BIGOBENCH,Gemini-2.0-Flash,Syn-20%,62.16,64.84
+BIGOBENCH,Gemini-2.0-Flash,Syn-40%,60.50,63.44
+EFFIBENCH,Gemini-2.0-Flash,Original,54.38,57.69
+EFFIBENCH,Gemini-2.0-Flash,ISO,29.29,32.54
+EFFIBENCH,Gemini-2.0-Flash,ISO (dec only),27.34,30.47
+EFFIBENCH,Gemini-2.0-Flash,Syn-20%,53.20,55.33
+EFFIBENCH,Gemini-2.0-Flash,Syn-40%,51.78,53.85
+MBPP,Gemini-2.0-Flash,Original,80.78,81.71
+MBPP,Gemini-2.0-Flash,ISO,58.05,61.09
+MBPP,Gemini-2.0-Flash,ISO (dec only),54.01,56.03
+MBPP,Gemini-2.0-Flash,Syn-20%,79.22,80.16
+MBPP,Gemini-2.0-Flash,Syn-40%,76.42,77.82
+BIGOBENCH,Gemini-2.5-Flash,Original,43.22,51.41
+BIGOBENCH,Gemini-2.5-Flash,ISO,25.47,33.28
+BIGOBENCH,Gemini-2.5-Flash,ISO (dec only),30.00,35.94
+BIGOBENCH,Gemini-2.5-Flash,Syn-20%,45.06,50.00
+BIGOBENCH,Gemini-2.5-Flash,Syn-40%,46.16,52.50
+EFFIBENCH,Gemini-2.5-Flash,Original,26.15,31.07
+EFFIBENCH,Gemini-2.5-Flash,ISO,11.72,15.38
+EFFIBENCH,Gemini-2.5-Flash,ISO (dec only),13.67,16.86
+EFFIBENCH,Gemini-2.5-Flash,Syn-20%,27.04,30.77
+EFFIBENCH,Gemini-2.5-Flash,Syn-40%,28.05,30.77
+MBPP,Gemini-2.5-Flash,Original,77.35,80.16
+MBPP,Gemini-2.5-Flash,ISO,47.24,54.09
+MBPP,Gemini-2.5-Flash,ISO (dec only),48.02,55.25
+MBPP,Gemini-2.5-Flash,Syn-20%,75.25,77.04
+MBPP,Gemini-2.5-Flash,Syn-40%,76.11,79.77
+BIGOBENCH,Codestral-22B,Original,22.00,22.03
+BIGOBENCH,Codestral-22B,ISO,12.56,12.81
+BIGOBENCH,Codestral-22B,ISO (dec only),2.31,2.81
+BIGOBENCH,Codestral-22B,Syn-20%,17.19,20.31
+BIGOBENCH,Codestral-22B,Syn-40%,16.06,19.06
+EFFIBENCH,Codestral-22B,Original,21.30,21.30
+EFFIBENCH,Codestral-22B,ISO,10.65,10.65
+EFFIBENCH,Codestral-22B,ISO (dec only),0.00,0.00
+EFFIBENCH,Codestral-22B,Syn-20%,18.88,21.89
+EFFIBENCH,Codestral-22B,Syn-40%,7.57,8.28
+MBPP,Codestral-22B,Original,71.98,71.98
+MBPP,Codestral-22B,ISO,44.05,44.36
+MBPP,Codestral-22B,ISO (dec only),36.96,36.96
+MBPP,Codestral-22B,Syn-20%,64.20,68.09
+MBPP,Codestral-22B,Syn-40%,35.10,36.58
+BIGOBENCH,CodeLlama-13B,Original,2.09,2.19
+BIGOBENCH,CodeLlama-13B,ISO,1.72,1.88
+BIGOBENCH,CodeLlama-13B,ISO (dec only),0.00,0.00
+BIGOBENCH,CodeLlama-13B,Syn-20%,1.16,1.56
+BIGOBENCH,CodeLlama-13B,Syn-40%,0.78,1.09
+EFFIBENCH,CodeLlama-13B,Original,0.41,0.89
+EFFIBENCH,CodeLlama-13B,ISO,0.00,0.00
+EFFIBENCH,CodeLlama-13B,ISO (dec only),0.00,0.00
+EFFIBENCH,CodeLlama-13B,Syn-20%,6.15,7.69
+EFFIBENCH,CodeLlama-13B,Syn-40%,5.21,6.51
+MBPP,CodeLlama-13B,Original,12.76,16.34
+MBPP,CodeLlama-13B,ISO,2.49,3.11
+MBPP,CodeLlama-13B,ISO (dec only),0.93,1.17
+MBPP,CodeLlama-13B,Syn-20%,17.74,22.57
+MBPP,CodeLlama-13B,Syn-40%,21.25,26.85
+BIGOBENCH,StarCoder2-15B,Original,0.62,0.62
+BIGOBENCH,StarCoder2-15B,ISO,0.00,0.00
+BIGOBENCH,StarCoder2-15B,ISO (dec only),0.00,0.00
+BIGOBENCH,StarCoder2-15B,Syn-20%,0.25,0.31
+BIGOBENCH,StarCoder2-15B,Syn-40%,0.00,0.00
+EFFIBENCH,StarCoder2-15B,Original,3.91,4.14
+EFFIBENCH,StarCoder2-15B,ISO,0.00,0.00
+EFFIBENCH,StarCoder2-15B,ISO (dec only),0.00,0.00
+EFFIBENCH,StarCoder2-15B,Syn-20%,0.30,0.30
+EFFIBENCH,StarCoder2-15B,Syn-40%,0.59,0.59
+MBPP,StarCoder2-15B,Original,24.28,24.51
+MBPP,StarCoder2-15B,ISO,0.78,0.78
+MBPP,StarCoder2-15B,ISO (dec only),1.95,1.95
+MBPP,StarCoder2-15B,Syn-20%,6.54,6.61
+MBPP,StarCoder2-15B,Syn-40%,6.38,7.00
